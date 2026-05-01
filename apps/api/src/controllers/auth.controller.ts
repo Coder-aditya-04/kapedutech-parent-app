@@ -226,7 +226,8 @@ export async function verifyFirebasePhone(req: Request, res: Response): Promise<
   try {
     ({ phone } = await verifyFirebaseIdToken(idToken));
   } catch (e) {
-    res.status(401).json({ message: "Invalid or expired Firebase token." });
+    console.error("[Firebase] verifyIdToken failed:", e);
+    res.status(401).json({ message: "Firebase token verification failed. Check Render logs." });
     return;
   }
 

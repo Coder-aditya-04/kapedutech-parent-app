@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  View, StyleSheet, KeyboardAvoidingView, Platform,
+  View, KeyboardAvoidingView, Platform,
   TouchableOpacity, TextInput as RNTextInput, ScrollView,
 } from "react-native";
 import { Image } from "expo-image";
@@ -9,10 +9,12 @@ import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
-import auth, { type FirebaseAuthTypes } from "@react-native-firebase/auth";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "@/src/context/AuthContext";
+import auth, { type FirebaseAuthTypes } from "@react-native-firebase/auth";
 import { verifyFirebaseToken, savePushToken } from "@/src/api/auth";
+import { LinearGradient } from "expo-linear-gradient";
+import { useTheme, ACCENT, ACCENT_2, BgBlobs, GlassCard } from "@/src/theme";
 
 async function registerForPushNotifications(): Promise<string | null> {
   try {
@@ -33,22 +35,11 @@ async function registerForPushNotifications(): Promise<string | null> {
 
 type Step = "phone" | "otp";
 const OTP_LENGTH = 6;
-const OTP_EXPIRY_SECONDS = 300; // Firebase phone auth session = 5 min
-
-// Floating feature card used in the illustration
-function FeatureCard({ icon, label, color, bg, style }: {
-  icon: string; label: string; color: string; bg: string; style?: object;
-}) {
-  return (
-    <View style={[styles.floatCard, { backgroundColor: bg }, style]}>
-      <MaterialCommunityIcons name={icon as never} size={18} color={color} />
-      <Text style={[styles.floatCardText, { color }]}>{label}</Text>
-    </View>
-  );
-}
+const OTP_EXPIRY_SECONDS = 300;
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const t = useTheme();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
@@ -59,6 +50,9 @@ export default function LoginScreen() {
   const otpRefs = useRef<(RNTextInput | null)[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const inputBg = t.dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.92)";
+  const inputBorder = t.dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.9)";
+
   useEffect(() => {
     if (step === "otp") setTimeout(() => otpRefs.current[0]?.focus(), 100);
   }, [step]);
@@ -67,9 +61,9 @@ export default function LoginScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
     setOtpTimer(OTP_EXPIRY_SECONDS);
     timerRef.current = setInterval(() => {
-      setOtpTimer(t => {
-        if (t <= 1) { clearInterval(timerRef.current!); return 0; }
-        return t - 1;
+      setOtpTimer(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current!); return 0; }
+        return prev - 1;
       });
     }, 1000);
   }
@@ -77,10 +71,7 @@ export default function LoginScreen() {
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
   async function handleSendOtp() {
-    if (!/^\d{10}$/.test(phone)) {
-      setError("Enter a valid 10-digit mobile number.");
-      return;
-    }
+    if (!/^\d{10}$/.test(phone)) { setError("Enter a valid 10-digit mobile number."); return; }
     setError(""); setLoading(true);
     try {
       const confirmation = await auth().signInWithPhoneNumber(`+91${phone}`);
@@ -109,17 +100,18 @@ export default function LoginScreen() {
       router.replace("/(tabs)");
       registerForPushNotifications()
         .then((pushToken) => { if (pushToken) savePushToken(parent.id, pushToken); })
-        .catch((e) => console.log("[Push] Registration failed:", e));
+        .catch(() => {});
     } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? "";
       const msg = err instanceof Error ? err.message : "OTP verification failed.";
-      if (msg.includes("session-expired") || msg.includes("expired")) {
+      if (code === "auth/session-expired" || code === "auth/code-expired") {
         setOtpDigits(Array(OTP_LENGTH).fill(""));
         setError("OTP expired. Tap 'Resend OTP' to get a new code.");
         if (timerRef.current) clearInterval(timerRef.current);
         setOtpTimer(0);
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else {
-        setError(msg);
+        setError(msg || "Verification failed. Please try again.");
       }
     } finally { setLoading(false); }
   }
@@ -136,377 +128,243 @@ export default function LoginScreen() {
       return;
     }
     const digit = value.replace(/\D/g, "");
-    const newDigits = [...otpDigits];
-    newDigits[index] = digit;
-    setOtpDigits(newDigits);
-    setError("");
+    const newDigits = [...otpDigits]; newDigits[index] = digit;
+    setOtpDigits(newDigits); setError("");
     if (digit && index < OTP_LENGTH - 1) otpRefs.current[index + 1]?.focus();
   }
 
   function handleOtpKeyPress(e: { nativeEvent: { key: string } }, index: number) {
     if (e.nativeEvent.key === "Backspace" && !otpDigits[index] && index > 0) {
-      const newDigits = [...otpDigits];
-      newDigits[index - 1] = "";
+      const newDigits = [...otpDigits]; newDigits[index - 1] = "";
       setOtpDigits(newDigits);
       otpRefs.current[index - 1]?.focus();
     }
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }} edges={["top"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ─── Hero illustration area ─── */}
-          <View style={styles.hero}>
-            {/* Background bubbles */}
-            <View style={styles.bubble1} />
-            <View style={styles.bubble2} />
-            <View style={styles.bubble3} />
+  // ── Phone step ─────────────────────────────────────────────────────────────
+  if (step === "phone") {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+        <BgBlobs />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+            {/* Back button (goes to onboarding) */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, zIndex: 2 }}>
+              <TouchableOpacity
+                onPress={() => router.replace("/onboarding")}
+                style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: t.card, borderWidth: 1, borderColor: t.cardBorder, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="arrow-back" size={18} color={t.text2} />
+              </TouchableOpacity>
+            </View>
 
             {/* Logo */}
-            <View style={styles.logoWrap}>
-              <Image
-                source={require("@/assets/images/kap_logo.png")}
-                style={styles.logo}
-                contentFit="contain"
-              />
+            <View style={{ alignItems: "center", marginTop: 12, marginBottom: 20, zIndex: 2 }}>
+              <View style={{ backgroundColor: "white", borderRadius: 16, padding: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}>
+                <Image source={require("@/assets/images/kap_logo.png")} style={{ width: 140, height: 56 }} contentFit="contain" />
+              </View>
             </View>
 
-            {/* Central illustration — floating cards around a hub icon */}
-            <View style={styles.illustrationHub}>
-              {/* Central circle */}
-              <View style={styles.hubCircle}>
-                <MaterialCommunityIcons name="shield-check" size={36} color="#4F46E5" />
+            {/* Eyebrow + title + subtitle */}
+            <View style={{ paddingHorizontal: 24, alignItems: "center", zIndex: 2 }}>
+              <Text style={{ fontSize: 10, fontWeight: "800", color: ACCENT, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+                Parent Login
+              </Text>
+              <Text style={{ fontSize: 26, fontWeight: "800", color: t.text, letterSpacing: -0.5, textAlign: "center", lineHeight: 32, marginBottom: 10 }}>
+                Enter your registered{"\n"}mobile number
+              </Text>
+              <Text style={{ fontSize: 13, color: t.text2, textAlign: "center", lineHeight: 20, marginBottom: 28, maxWidth: 300 }}>
+                We'll send a 6-digit OTP to verify it's you. Use the number you shared at admission.
+              </Text>
+            </View>
+
+            {/* Phone input — glass card */}
+            <View style={{ paddingHorizontal: 24, zIndex: 2 }}>
+              <GlassCard intensity={55} style={{ flexDirection: "row", alignItems: "center", borderRadius: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 16, paddingRight: 14, borderRightWidth: 1, borderRightColor: t.divider, paddingVertical: 16 }}>
+                  <Text style={{ fontSize: 18 }}>🇮🇳</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: t.text }}>+91</Text>
+                  <Ionicons name="chevron-down" size={12} color={t.text3} />
+                </View>
+                <RNTextInput
+                  style={{ flex: 1, fontSize: 18, fontWeight: "700", color: t.text, paddingHorizontal: 16, paddingVertical: 16, letterSpacing: 0.5 }}
+                  placeholder="00000 00000"
+                  placeholderTextColor={t.text3}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  value={phone}
+                  onChangeText={(v) => { setPhone(v.replace(/\D/g, "")); setError(""); }}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSendOtp}
+                />
+              </GlassCard>
+
+              {/* Security note */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 12 }}>
+                <Ionicons name="shield-outline" size={13} color={t.text3} />
+                <Text style={{ fontSize: 11, color: t.text3 }}>Secured by KAP Edutech. We never share your number.</Text>
               </View>
 
-              {/* Floating feature cards */}
-              <FeatureCard icon="qrcode-scan" label="QR Scan" color="#0891B2" bg="#E0F7FA" style={styles.fc1} />
-              <FeatureCard icon="bell-ring" label="Alerts" color="#7C3AED" bg="#EDE9FE" style={styles.fc2} />
-              <FeatureCard icon="chart-donut" label="Reports" color="#059669" bg="#D1FAE5" style={styles.fc3} />
-              <FeatureCard icon="calendar-check" label="Attendance" color="#D97706" bg="#FEF3C7" style={styles.fc4} />
+              {/* Error */}
+              {error ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FEF2F2", borderRadius: 10, padding: 12, marginTop: 12, borderLeftWidth: 3, borderLeftColor: "#DC2626" }}>
+                  <Ionicons name="alert-circle-outline" size={15} color="#DC2626" />
+                  <Text style={{ color: "#DC2626", fontSize: 13, flex: 1 }}>{error}</Text>
+                </View>
+              ) : null}
             </View>
 
-            <Text style={styles.heroTagline}>Real-time student attendance{"\n"}tracking for parents</Text>
+            <View style={{ flex: 1, minHeight: 40 }} />
+
+            {/* CTA */}
+            <View style={{ paddingHorizontal: 24, paddingBottom: 12, zIndex: 2 }}>
+              <TouchableOpacity onPress={handleSendOtp} disabled={loading} activeOpacity={0.88}>
+                <LinearGradient
+                  colors={[ACCENT, ACCENT_2]}
+                  start={[0, 0]} end={[1, 0]}
+                  style={[{ height: 54, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, shadowColor: ACCENT, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }, loading && { opacity: 0.6 }]}
+                >
+                  <Text style={{ color: "white", fontSize: 16, fontWeight: "700", letterSpacing: 0.1 }}>
+                    {loading ? "Sending OTP..." : "Send OTP"}
+                  </Text>
+                  {!loading && <Ionicons name="arrow-forward" size={18} color="white" />}
+                </LinearGradient>
+              </TouchableOpacity>
+              <Text style={{ textAlign: "center", marginTop: 14, fontSize: 12, color: t.text3 }}>
+                Trouble logging in?{" "}
+                <Text style={{ color: ACCENT, fontWeight: "700" }}>Contact institute</Text>
+              </Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── OTP step ───────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <BgBlobs />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+          {/* Back button */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 8, zIndex: 2 }}>
+            <TouchableOpacity
+              onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); confirmationRef.current = null; }}
+              style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: t.card, borderWidth: 1, borderColor: t.cardBorder, alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="arrow-back" size={18} color={t.text2} />
+            </TouchableOpacity>
           </View>
 
+          {/* Logo */}
+          <View style={{ alignItems: "center", marginTop: 12, marginBottom: 20, zIndex: 2 }}>
+            <View style={{ backgroundColor: "white", borderRadius: 16, padding: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}>
+              <Image source={require("@/assets/images/kap_logo.png")} style={{ width: 120, height: 48 }} contentFit="contain" />
+            </View>
+          </View>
 
-          {/* ─── Form card ─── */}
-          <View style={styles.formCard}>
-            {step === "phone" ? (
-              <>
-                <Text style={styles.formTitle}>Sign In</Text>
-                <Text style={styles.formSub}>Enter your registered mobile number</Text>
+          {/* Eyebrow + title */}
+          <View style={{ paddingHorizontal: 24, alignItems: "center", zIndex: 2 }}>
+            <Text style={{ fontSize: 10, fontWeight: "800", color: ACCENT, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+              Verification
+            </Text>
+            <Text style={{ fontSize: 26, fontWeight: "800", color: t.text, letterSpacing: -0.5, textAlign: "center", lineHeight: 32, marginBottom: 10 }}>
+              Enter the 6-digit code
+            </Text>
+            <Text style={{ fontSize: 13, color: t.text2, textAlign: "center", lineHeight: 20, marginBottom: 8 }}>
+              Sent to <Text style={{ color: t.text, fontWeight: "700" }}>+91 {phone}</Text>
+              {" "}·{" "}
+              <Text
+                style={{ color: ACCENT, fontWeight: "700" }}
+                onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); confirmationRef.current = null; }}
+              >
+                Change
+              </Text>
+            </Text>
 
-                {/* Phone field */}
-                <Text style={styles.fieldLabel}>Mobile Number</Text>
-                <View style={styles.inputRow}>
-                  <View style={styles.inputIconWrap}>
-                    <Ionicons name="phone-portrait-outline" size={20} color="#64748B" />
-                  </View>
-                  <View style={styles.inputDivider} />
-                  <View style={styles.countryTag}>
-                    <Text style={styles.countryTagText}>+91</Text>
-                  </View>
-                  <RNTextInput
-                    style={styles.inputField}
-                    placeholder="Enter your mobile number"
-                    placeholderTextColor="#CBD5E1"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    value={phone}
-                    onChangeText={(t) => { setPhone(t.replace(/\D/g, "")); setError(""); }}
-                    returnKeyType="done"
-                    onSubmitEditing={handleSendOtp}
-                  />
-                </View>
-
-                {error ? (
-                  <View style={styles.errorBox}>
-                    <Ionicons name="alert-circle-outline" size={15} color="#DC2626" />
-                    <Text style={styles.errorText}>{error}</Text>
-                  </View>
-                ) : null}
-
-                <TouchableOpacity
-                  style={[styles.cta, loading && styles.ctaDisabled]}
-                  onPress={handleSendOtp}
-                  disabled={loading}
-                  activeOpacity={0.88}
-                >
-                  {loading ? (
-                    <Text style={styles.ctaText}>Sending OTP...</Text>
-                  ) : (
-                    <View style={styles.ctaInner}>
-                      <Text style={styles.ctaText}>Send OTP</Text>
-                      <Ionicons name="arrow-forward" size={18} color="#fff" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                {/* Divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>Secure Login</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                {/* Security badges */}
-                <View style={styles.badgeRow}>
-                  <View style={styles.badge}>
-                    <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
-                    <Text style={styles.badgeText}>OTP Verified</Text>
-                  </View>
-                  <View style={styles.badge}>
-                    <Ionicons name="lock-closed-outline" size={14} color="#4F46E5" />
-                    <Text style={styles.badgeText}>End-to-End Secure</Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <>
-                {/* Back button */}
-                <TouchableOpacity
-                  onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); confirmationRef.current = null; }}
-                  style={styles.backRow}
-                >
-                  <Ionicons name="arrow-back" size={18} color="#4F46E5" />
-                  <Text style={styles.backText}>Change number</Text>
-                </TouchableOpacity>
-
-                <Text style={styles.formTitle}>Verify OTP</Text>
-                <Text style={styles.formSub}>
-                  6-digit code sent to{" "}
-                  <Text style={styles.phoneHighlight}>+91 {phone}</Text>
+            {/* Timer */}
+            {otpTimer > 0 && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 }}>
+                <Ionicons name="time-outline" size={13} color={otpTimer <= 60 ? "#DC2626" : ACCENT} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: otpTimer <= 60 ? "#DC2626" : ACCENT }}>
+                  Resend in {Math.floor(otpTimer / 60)}:{String(otpTimer % 60).padStart(2, "0")}
                 </Text>
-                {otpTimer > 0 && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                    <Ionicons name="time-outline" size={13} color={otpTimer <= 60 ? "#DC2626" : "#059669"} />
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: otpTimer <= 60 ? "#DC2626" : "#059669" }}>
-                      OTP expires in {Math.floor(otpTimer / 60)}:{String(otpTimer % 60).padStart(2, "0")}
-                    </Text>
-                  </View>
-                )}
-                {otpTimer === 0 && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                    <Ionicons name="alert-circle-outline" size={13} color="#DC2626" />
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#DC2626" }}>OTP expired — tap Resend below</Text>
-                  </View>
-                )}
-
-                <Text style={styles.fieldLabel}>One-Time Password</Text>
-                <View style={styles.otpRow}>
-                  {otpDigits.map((digit, i) => (
-                    <RNTextInput
-                      key={i}
-                      ref={(ref) => { otpRefs.current[i] = ref; }}
-                      style={[styles.otpBox, digit ? styles.otpBoxFilled : null]}
-                      value={digit}
-                      onChangeText={(v) => handleOtpChange(v, i)}
-                      onKeyPress={(e) => handleOtpKeyPress(e, i)}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      selectTextOnFocus
-                      textAlign="center"
-                    />
-                  ))}
-                </View>
-
-                {error ? (
-                  <View style={styles.errorBox}>
-                    <Ionicons name="alert-circle-outline" size={15} color="#DC2626" />
-                    <Text style={styles.errorText}>{error}</Text>
-                  </View>
-                ) : null}
-
-                <TouchableOpacity
-                  style={[styles.cta, loading && styles.ctaDisabled]}
-                  onPress={handleVerifyOtp}
-                  disabled={loading}
-                  activeOpacity={0.88}
-                >
-                  {loading ? (
-                    <Text style={styles.ctaText}>Verifying...</Text>
-                  ) : (
-                    <View style={styles.ctaInner}>
-                      <Text style={styles.ctaText}>Verify &amp; Sign In</Text>
-                      <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => { setOtpDigits(Array(OTP_LENGTH).fill("")); handleSendOtp(); }} style={styles.resendBtn}>
-                  <Text style={styles.resendText}>
-                    Didn&apos;t receive the code?{" "}
-                    <Text style={styles.resendLink}>Resend OTP</Text>
-                  </Text>
-                </TouchableOpacity>
-              </>
+              </View>
             )}
           </View>
 
-          {/* ─── Footer ─── */}
-          <Text style={styles.footer}>
-            By logging in, you agree to our{"\n"}
-            <Text style={styles.footerLink}>Terms &amp; Conditions</Text>
-            {" "}and{" "}
-            <Text style={styles.footerLink}>Privacy Policy</Text>
-          </Text>
+          {/* OTP boxes */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8, paddingHorizontal: 24, marginTop: 20, zIndex: 2 }}>
+            {otpDigits.map((digit, i) => (
+              <RNTextInput
+                key={i}
+                ref={(ref) => { otpRefs.current[i] = ref; }}
+                style={{
+                  flex: 1, height: 58,
+                  borderWidth: 1.5,
+                  borderColor: digit ? ACCENT : inputBorder,
+                  borderRadius: 14,
+                  backgroundColor: digit ? `rgba(31,168,224,0.12)` : inputBg,
+                  fontSize: 24, fontWeight: "800", color: t.text,
+                  textAlign: "center",
+                }}
+                value={digit}
+                onChangeText={(v) => handleOtpChange(v, i)}
+                onKeyPress={(e) => handleOtpKeyPress(e, i)}
+                keyboardType="number-pad"
+                maxLength={6}
+                selectTextOnFocus
+              />
+            ))}
+          </View>
+
+          {/* Error */}
+          {error ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FEF2F2", borderRadius: 10, padding: 12, marginTop: 12, marginHorizontal: 24, borderLeftWidth: 3, borderLeftColor: "#DC2626", zIndex: 2 }}>
+              <Ionicons name="alert-circle-outline" size={15} color="#DC2626" />
+              <Text style={{ color: "#DC2626", fontSize: 13, flex: 1 }}>{error}</Text>
+            </View>
+          ) : null}
+
+          {/* Resend */}
+          <View style={{ alignItems: "center", marginTop: 20, zIndex: 2 }}>
+            {otpTimer === 0 ? (
+              <TouchableOpacity onPress={() => { setOtpDigits(Array(OTP_LENGTH).fill("")); handleSendOtp(); }}>
+                <Text style={{ fontSize: 13, color: ACCENT, fontWeight: "700" }}>Resend OTP</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={{ fontSize: 13, color: t.text3 }}>
+                Resend available after timer
+              </Text>
+            )}
+          </View>
+
+          <View style={{ flex: 1, minHeight: 32 }} />
+
+          {/* CTA */}
+          <View style={{ paddingHorizontal: 24, paddingBottom: 12, zIndex: 2 }}>
+            <TouchableOpacity onPress={handleVerifyOtp} disabled={loading} activeOpacity={0.88}>
+              <LinearGradient
+                colors={[ACCENT, ACCENT_2]}
+                start={[0, 0]} end={[1, 0]}
+                style={[{ height: 54, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, shadowColor: ACCENT, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }, loading && { opacity: 0.6 }]}
+              >
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "700", letterSpacing: 0.1 }}>
+                  {loading ? "Verifying..." : "Verify & continue"}
+                </Text>
+                {!loading && <Ionicons name="checkmark" size={18} color="white" />}
+              </LinearGradient>
+            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 14 }}>
+              <MaterialCommunityIcons name="shield-lock-outline" size={13} color={t.text3} />
+              <Text style={{ fontSize: 11, color: t.text3 }}>End-to-end encrypted · KAP Edutech</Text>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 1, backgroundColor: "#FFFFFF" },
-
-  // ─── Hero
-  hero: {
-    backgroundColor: "#FFFFFF",
-    paddingTop: 24,
-    paddingBottom: 32,
-    alignItems: "center",
-    overflow: "hidden",
-    position: "relative",
-    minHeight: 300,
-  },
-  bubble1: { position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(79,70,229,0.05)" },
-  bubble2: { position: "absolute", bottom: 20, left: -30, width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(79,70,229,0.04)" },
-  bubble3: { position: "absolute", top: 60, left: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(79,70,229,0.05)" },
-
-  logoWrap: { alignItems: "center", marginBottom: 20, zIndex: 2 },
-  logo: { width: 180, height: 56 },
-
-  illustrationHub: { width: 220, height: 160, alignItems: "center", justifyContent: "center", position: "relative", zIndex: 2, marginBottom: 16 },
-  hubCircle: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center", alignItems: "center",
-    shadowColor: "#4F46E5", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18, shadowRadius: 12, elevation: 6,
-    borderWidth: 2, borderColor: "#E0E7FF",
-  },
-
-  // Floating cards
-  floatCard: {
-    position: "absolute", flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1, shadowRadius: 6, elevation: 3,
-  },
-  floatCardText: { fontSize: 11, fontWeight: "700" },
-  fc1: { top: 10, left: 0 },
-  fc2: { top: 10, right: 0 },
-  fc3: { bottom: 10, left: 0 },
-  fc4: { bottom: 10, right: 0 },
-
-  heroTagline: { fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 20, zIndex: 2 },
-
-  // ─── Form card
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
-    flex: 1,
-  },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
-  backText: { color: "#4F46E5", fontSize: 14, fontWeight: "600" },
-
-  formTitle: { fontSize: 24, fontWeight: "800", color: "#0F172A", marginBottom: 6, letterSpacing: -0.3 },
-  formSub: { fontSize: 14, color: "#64748B", marginBottom: 22, lineHeight: 20 },
-  phoneHighlight: { color: "#4F46E5", fontWeight: "700" },
-
-  fieldLabel: {
-    fontSize: 12, fontWeight: "700", color: "#374151",
-    textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10,
-  },
-
-  // Input field (icon + divider + text)
-  inputRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    borderWidth: 1.5, borderColor: "#E2E8F0",
-    marginBottom: 16, overflow: "hidden",
-  },
-  inputIconWrap: { paddingHorizontal: 14, paddingVertical: 14 },
-  inputDivider: { width: 1, height: 24, backgroundColor: "#E2E8F0" },
-  countryTag: { paddingHorizontal: 12 },
-  countryTagText: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
-  inputField: {
-    flex: 1, fontSize: 15, color: "#0F172A",
-    paddingHorizontal: 12, paddingVertical: 14,
-  },
-
-  // OTP
-  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginBottom: 16 },
-  otpBox: {
-    flex: 1, height: 58,
-    borderWidth: 1.5, borderColor: "#E2E8F0",
-    borderRadius: 14, backgroundColor: "#F8FAFC",
-    fontSize: 24, fontWeight: "800", color: "#0F172A",
-  },
-  otpBoxFilled: { borderColor: "#4F46E5", backgroundColor: "#EEF2FF" },
-
-  // Error
-  errorBox: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#FEF2F2", borderRadius: 10,
-    padding: 12, marginBottom: 12,
-    borderLeftWidth: 3, borderLeftColor: "#DC2626",
-  },
-  errorText: { color: "#DC2626", fontSize: 13, flex: 1 },
-
-  // CTA button
-  cta: {
-    backgroundColor: "#1A1C6B",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 4,
-    shadowColor: "#1A1C6B",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  ctaDisabled: { opacity: 0.6 },
-  ctaInner: { flexDirection: "row", alignItems: "center", gap: 8 },
-  ctaText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
-
-  // Divider
-  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#E2E8F0" },
-  dividerText: { fontSize: 12, color: "#94A3B8", fontWeight: "600", letterSpacing: 0.5 },
-
-  // Security badges
-  badgeRow: { flexDirection: "row", gap: 10, justifyContent: "center" },
-  badge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#F8FAFC", borderRadius: 20,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderWidth: 1, borderColor: "#E2E8F0",
-  },
-  badgeText: { fontSize: 12, color: "#374151", fontWeight: "500" },
-
-  // Resend
-  resendBtn: { alignItems: "center", marginTop: 18 },
-  resendText: { fontSize: 13, color: "#94A3B8" },
-  resendLink: { color: "#4F46E5", fontWeight: "700" },
-
-  // Footer
-  footer: {
-    fontSize: 12, color: "#94A3B8",
-    textAlign: "center", lineHeight: 18,
-    paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32,
-    backgroundColor: "#FFFFFF",
-  },
-  footerLink: { color: "#4F46E5", fontWeight: "600" },
-});
