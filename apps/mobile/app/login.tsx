@@ -161,9 +161,7 @@ export default function LoginScreen() {
 
             {/* Logo */}
             <View style={{ alignItems: "center", marginTop: 12, marginBottom: 20, zIndex: 2 }}>
-              <View style={{ backgroundColor: "white", borderRadius: 16, padding: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}>
-                <Image source={require("@/assets/images/kap_logo.png")} style={{ width: 140, height: 56 }} contentFit="contain" />
-              </View>
+              <Image source={require("@/assets/images/kap_logo_transparent.png")} style={{ width: 160, height: 60 }} contentFit="contain" tintColor={t.dark ? "#FFFFFF" : undefined} />
             </View>
 
             {/* Eyebrow + title + subtitle */}
@@ -261,9 +259,7 @@ export default function LoginScreen() {
 
           {/* Logo */}
           <View style={{ alignItems: "center", marginTop: 12, marginBottom: 20, zIndex: 2 }}>
-            <View style={{ backgroundColor: "white", borderRadius: 16, padding: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}>
-              <Image source={require("@/assets/images/kap_logo.png")} style={{ width: 120, height: 48 }} contentFit="contain" />
-            </View>
+            <Image source={require("@/assets/images/kap_logo_transparent.png")} style={{ width: 140, height: 54 }} contentFit="contain" tintColor={t.dark ? "#FFFFFF" : undefined} />
           </View>
 
           {/* Eyebrow + title */}
@@ -290,7 +286,7 @@ export default function LoginScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 }}>
                 <Ionicons name="time-outline" size={13} color={otpTimer <= 60 ? "#DC2626" : ACCENT} />
                 <Text style={{ fontSize: 12, fontWeight: "700", color: otpTimer <= 60 ? "#DC2626" : ACCENT }}>
-                  Resend in {Math.floor(otpTimer / 60)}:{String(otpTimer % 60).padStart(2, "0")}
+                  Resend code in {Math.floor(otpTimer / 60)}:{String(otpTimer % 60).padStart(2, "0")}
                 </Text>
               </View>
             )}

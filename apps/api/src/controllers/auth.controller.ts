@@ -204,12 +204,13 @@ export async function verifyOtpByEmail(req: Request, res: Response): Promise<voi
 export async function savePushToken(req: Request, res: Response): Promise<void> {
   const { parentId, pushToken } = req.body as { parentId?: string; pushToken?: string };
 
-  if (!parentId || !pushToken) {
-    res.status(400).json({ message: "parentId and pushToken are required." });
+  if (!parentId) {
+    res.status(400).json({ message: "parentId is required." });
     return;
   }
 
-  await prisma.parent.update({ where: { id: parentId }, data: { pushToken } });
+  // Empty/null pushToken clears notifications for this parent
+  await prisma.parent.update({ where: { id: parentId }, data: { pushToken: pushToken || null } });
 
   res.status(200).json({ message: "Push token saved." });
 }
