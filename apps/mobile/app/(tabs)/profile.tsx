@@ -256,9 +256,9 @@ export default function ProfileScreen() {
         <View style={{ alignItems: "center", marginTop: 24, gap: 8 }}>
           <Image
             source={require("@/assets/images/kap_logo_transparent.png")}
-            style={{ width: 120, height: 36 }}
+            style={{ width: 160, height: 52 }}
             contentFit="contain"
-            tintColor={t.dark ? "#FFFFFF" : undefined}
+            tintColor="#1FA8E0"
           />
           <Text style={{ fontSize: 11, color: t.text3, fontWeight: "600" }}>v2.4.1 • © 2026 KAP Edutech</Text>
         </View>

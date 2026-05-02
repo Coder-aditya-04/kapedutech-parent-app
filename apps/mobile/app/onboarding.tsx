@@ -163,9 +163,9 @@ function ArtLogo() {
       }}>
         <Image
           source={require("../assets/images/kap_logo_transparent.png")}
-          style={{ width: 100, height: 100 }}
+          style={{ width: 130, height: 130 }}
           contentFit="contain"
-          tintColor={t.dark ? "#FFFFFF" : undefined}
+          tintColor="#1FA8E0"
         />
       </View>
     </View>
@@ -450,9 +450,9 @@ export default function OnboardingScreen() {
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4, zIndex: 2 }}>
         <Image
           source={require("../assets/images/kap_logo_transparent.png")}
-          style={{ width: 110, height: 32 }}
+          style={{ width: 150, height: 46 }}
           contentFit="contain"
-          tintColor={t.dark ? "#FFFFFF" : undefined}
+          tintColor="#1FA8E0"
         />
         {idx < SLIDES.length - 1 && (
           <TouchableOpacity onPress={finish} hitSlop={{ top: 12, bottom: 12, left: 20, right: 20 }}>
