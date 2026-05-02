@@ -1,20 +1,20 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { PaperProvider, MD3LightTheme } from "react-native-paper";
+import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { AuthProvider } from "@/src/context/AuthContext";
 import { useEffect } from "react";
+import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const theme = {
+const lightTheme = {
   ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    primary: "#4F46E5",
-    secondary: "#7C3AED",
-  },
+  colors: { ...MD3LightTheme.colors, primary: "#1FA8E0", secondary: "#4F46E5" },
+};
+const darkTheme = {
+  ...MD3DarkTheme,
+  colors: { ...MD3DarkTheme.colors, primary: "#1FA8E0", secondary: "#4F46E5" },
 };
 
-// Global notification listener — runs regardless of which tab is active
 function NotificationListener() {
   useEffect(() => {
     let receivedSub: { remove: () => void } | null = null;
@@ -24,7 +24,16 @@ function NotificationListener() {
       try {
         const Notifications = await import("expo-notifications");
 
-        // Allow notifications to show as banners while app is in foreground
+        if (require("react-native").Platform.OS === "android") {
+          await Notifications.setNotificationChannelAsync("default", {
+            name: "KAP Connect",
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: "#1FA8E0",
+            showBadge: true,
+          });
+        }
+
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
             shouldShowAlert: true,
@@ -39,7 +48,6 @@ function NotificationListener() {
           try {
             const raw = await AsyncStorage.getItem("notifications");
             const existing = raw ? JSON.parse(raw) : [];
-            // Avoid duplicates
             if (existing.some((n: { id: string }) => n.id === id)) return;
             const updated = [
               { id, title: title || "KAP Edutech", body: body || "", time: new Date().toISOString(), read: false },
@@ -49,7 +57,6 @@ function NotificationListener() {
           } catch {}
         }
 
-        // Foreground notifications
         receivedSub = Notifications.addNotificationReceivedListener((notification) => {
           const title = notification.request.content.title ?? "";
           const body = notification.request.content.body ?? "";
@@ -57,7 +64,6 @@ function NotificationListener() {
           saveNotification(title, body, id);
         });
 
-        // Background/killed — fires when user taps the notification
         responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
           const title = response.notification.request.content.title ?? "";
           const body = response.notification.request.content.body ?? "";
@@ -79,18 +85,22 @@ function NotificationListener() {
 }
 
 export default function RootLayout() {
+  const scheme = useColorScheme();
+  const paperTheme = scheme === "dark" ? darkTheme : lightTheme;
+
   return (
     <AuthProvider>
-      <PaperProvider theme={theme}>
+      <PaperProvider theme={paperTheme}>
         <NotificationListener />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="login" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="test-detail" />
           <Stack.Screen name="modal" />
         </Stack>
-        <StatusBar style="auto" />
+        <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       </PaperProvider>
     </AuthProvider>
   );
