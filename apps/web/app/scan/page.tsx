@@ -10,10 +10,31 @@ declare class BarcodeDetector {
   static getSupportedFormats(): Promise<string[]>;
 }
 
-type ScanStatus = "idle" | "verifying" | "success" | "punch_out" | "already_marked" | "not_found" | "error";
+type ScanStatus = "idle" | "verifying" | "success" | "punch_out" | "already_marked" | "too_soon" | "not_found" | "error";
 interface AttendanceResult { studentName: string; time: string; type: "PUNCH_IN" | "PUNCH_OUT"; }
 
-const COOLDOWN_MS = 2500;
+const COOLDOWN_MS = 5000;
+
+function playSound(type: "success" | "punchout" | "warning" | "error") {
+  try {
+    const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtx();
+    function beep(freq: number, startOffset: number, dur: number, vol = 0.28) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = "sine"; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(vol, ctx.currentTime + startOffset);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startOffset + dur);
+      osc.start(ctx.currentTime + startOffset);
+      osc.stop(ctx.currentTime + startOffset + dur + 0.02);
+    }
+    if (type === "success")  { beep(660, 0, 0.12); beep(880, 0.14, 0.18); }
+    if (type === "punchout") { beep(880, 0, 0.12); beep(660, 0.14, 0.18); }
+    if (type === "warning")  { beep(440, 0, 0.12); beep(440, 0.18, 0.12); }
+    if (type === "error")    { beep(280, 0, 0.30, 0.22); }
+  } catch { /* AudioContext unavailable */ }
+}
 
 function computeBoxSize() {
   const vw = window.innerWidth;
@@ -159,7 +180,7 @@ export default function ScanPage() {
   async function handleScan(decodedText: string) {
     if (processingRef.current) return;
     processingRef.current = true;
-    setStatus("verifying"); // immediate feedback — user knows it was detected
+    setStatus("verifying");
 
     try {
       const res = await fetch("/api/attendance/qr-scan", {
@@ -171,20 +192,30 @@ export default function ScanPage() {
         const type: "PUNCH_IN" | "PUNCH_OUT" = data.type === "PUNCH_OUT" ? "PUNCH_OUT" : "PUNCH_IN";
         setResult({ studentName: data.studentName, time: data.time ?? new Date().toLocaleTimeString(), type });
         setStatus(type === "PUNCH_OUT" ? "punch_out" : "success");
+        playSound(type === "PUNCH_OUT" ? "punchout" : "success");
       } else if (res.status === 409) {
-        setStatus("already_marked"); setErrorMsg(data.message ?? "Already marked.");
+        if (data.code === "TOO_SOON") {
+          setStatus("too_soon"); setErrorMsg(data.message ?? "Please wait before punching out.");
+        } else {
+          setStatus("already_marked"); setErrorMsg(data.message ?? "Already marked.");
+        }
+        playSound("warning");
       } else if (res.status === 404) {
         setStatus("not_found"); setErrorMsg("Student not found.");
+        playSound("error");
       } else {
         setStatus("error"); setErrorMsg(data.message ?? "Something went wrong.");
+        playSound("error");
       }
     } catch {
       setStatus("error"); setErrorMsg("Network error.");
+      playSound("error");
     }
     setTimeout(() => { setStatus("idle"); setResult(null); setErrorMsg(""); processingRef.current = false; }, COOLDOWN_MS);
   }
 
   const borderColor =
+    status === "too_soon" ? "#F59E0B" :
     status === "success" ? "#16A34A" :
     status === "punch_out" ? "#2563EB" :
     status === "already_marked" ? "#D97706" :
@@ -345,6 +376,16 @@ export default function ScanPage() {
                   </>
                 )}
 
+                {status === "too_soon" && (
+                  <>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #F59E0B", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FCD34D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <p style={{ color: "#FCD34D", fontWeight: 800, fontSize: 18, margin: "0 0 6px" }}>Too Soon</p>
+                    <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 13, margin: 0, textAlign: "center" }}>{errorMsg}</p>
+                  </>
+                )}
+
                 {status === "already_marked" && (
                   <>
                     <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #D97706", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
@@ -412,11 +453,11 @@ export default function ScanPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 16 }}>
               <div style={{
                 width: 8, height: 8, borderRadius: "50%",
-                background: status === "success" ? "#4ADE80" : status === "punch_out" ? "#60A5FA" : status === "verifying" ? "#A78BFA" : status === "already_marked" ? "#FCD34D" : (status === "not_found" || status === "error") ? "#FCA5A5" : "#1FA8E0",
+                background: status === "success" ? "#4ADE80" : status === "punch_out" ? "#60A5FA" : status === "verifying" ? "#A78BFA" : (status === "already_marked" || status === "too_soon") ? "#FCD34D" : (status === "not_found" || status === "error") ? "#FCA5A5" : "#1FA8E0",
                 boxShadow: `0 0 8px ${status === "success" ? "#4ADE80" : status === "punch_out" ? "#60A5FA" : status === "verifying" ? "#A78BFA" : "#1FA8E0"}`,
               }} />
               <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
-                {status === "idle" ? "Ready" : status === "verifying" ? "Verifying" : status === "success" ? "Marked" : status === "punch_out" ? "Punched Out" : status === "already_marked" ? "Already Marked" : "Error"}
+                {status === "idle" ? "Ready" : status === "verifying" ? "Verifying" : status === "success" ? "Marked" : status === "punch_out" ? "Punched Out" : status === "already_marked" ? "Already Marked" : status === "too_soon" ? "Too Soon" : "Error"}
               </span>
             </div>
             <p style={{ fontFamily: "monospace", fontWeight: 800, color: "#FFFFFF", fontSize: "clamp(26px,4vw,40px)", margin: 0, letterSpacing: 3 }}>{timeStr}</p>

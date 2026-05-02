@@ -56,6 +56,22 @@ export async function qrScan(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // Enforce 5-minute minimum between punch in and punch out
+  if (hasPunchIn && !hasPunchOut) {
+    const punchInRecord = todayRecords.find(r => r.type === "PUNCH_IN");
+    if (punchInRecord) {
+      const minutesElapsed = (Date.now() - new Date(punchInRecord.markedAt).getTime()) / 60000;
+      if (minutesElapsed < 5) {
+        const waitMins = Math.ceil(5 - minutesElapsed);
+        res.status(409).json({
+          code: "TOO_SOON",
+          message: `Punch out too soon. Please wait ${waitMins} more minute${waitMins > 1 ? "s" : ""}.`,
+        });
+        return;
+      }
+    }
+  }
+
   const type = hasPunchIn ? "PUNCH_OUT" : "PUNCH_IN";
 
   const record = await prisma.attendance.create({
