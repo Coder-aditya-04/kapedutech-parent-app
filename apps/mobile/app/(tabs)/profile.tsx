@@ -8,26 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import Constants from "expo-constants";
-import { useTheme, ACCENT, ACCENT_2, GOOD, BAD, WARN, BgBlobs } from "@/src/theme";
-import { savePushToken } from "@/src/api/auth";
-
-async function registerForPushNotifications(): Promise<string | null> {
-  try {
-    const Notifications = await import("expo-notifications");
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    const { status } = existing === "granted"
-      ? { status: existing }
-      : await Notifications.requestPermissionsAsync();
-    if (status !== "granted") return null;
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-    if (!projectId) return null;
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    return token.data;
-  } catch {
-    return null;
-  }
-}
+import { useTheme, ACCENT, ACCENT_2, GOOD, BAD, BgBlobs } from "@/src/theme";
 
 type Student = { id: string; name: string; enrollmentNo: string; batch: string };
 type Parent = { id: string; name: string; phone: string; students: Student[] };
@@ -134,7 +115,6 @@ export default function ProfileScreen() {
   const { logout, activeStudentId, setActiveStudentId } = useAuth();
   const [parent, setParent] = useState<Parent | null>(null);
   const [lang, setLang] = useState<"en" | "hi">("en");
-  const [notifEnabled, setNotifEnabled] = useState(true);
   const [switchOpen, setSwitchOpen] = useState(false);
 
   useEffect(() => {
@@ -142,26 +122,11 @@ export default function ProfileScreen() {
       if (raw) setParent(JSON.parse(raw));
     });
     AsyncStorage.getItem("lang").then(v => { if (v === "hi" || v === "en") setLang(v); });
-    AsyncStorage.getItem("notif_enabled").then(v => { if (v !== null) setNotifEnabled(v === "true"); });
   }, []);
 
   async function handleLangChange(v: "en" | "hi") {
     setLang(v);
     await AsyncStorage.setItem("lang", v);
-  }
-
-  async function handleNotifToggle(v: boolean) {
-    setNotifEnabled(v);
-    await AsyncStorage.setItem("notif_enabled", String(v));
-    if (!parent?.id) return;
-    if (!v) {
-      // Clear push token on backend so no notifications are delivered
-      await savePushToken(parent.id, "").catch(() => {});
-    } else {
-      // Re-register and save push token
-      const token = await registerForPushNotifications();
-      if (token) await savePushToken(parent.id, token).catch(() => {});
-    }
   }
 
   async function handlePickStudent(s: Student) {
@@ -258,19 +223,6 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: 13, fontWeight: "700", color: t.text }}>Settings</Text>
         </View>
         <View style={{ backgroundColor: t.card, borderRadius: 18, padding: 6, marginBottom: 10, borderWidth: 1, borderColor: t.cardBorder }}>
-          <SettingRow
-            icon="bell-outline" iconBg={`${WARN}20`} iconFg={WARN}
-            label="Push notifications"
-            right={
-              <Switch
-                value={notifEnabled}
-                onValueChange={handleNotifToggle}
-                trackColor={{ false: t.neutralSoft, true: `${ACCENT}60` }}
-                thumbColor={notifEnabled ? ACCENT : t.text3}
-              />
-            }
-          />
-          <View style={{ height: 1, backgroundColor: t.divider, marginHorizontal: 8 }} />
           <SettingRow
             icon="translate" iconBg={t.accentSoft} iconFg={ACCENT}
             label="Language"
