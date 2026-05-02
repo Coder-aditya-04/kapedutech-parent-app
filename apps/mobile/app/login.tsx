@@ -49,6 +49,7 @@ export default function LoginScreen() {
   const confirmationRef = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const otpRefs = useRef<(RNTextInput | null)[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoHandledRef = useRef(false);
 
   const inputBg = t.dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.92)";
   const inputBorder = t.dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.9)";
@@ -56,6 +57,37 @@ export default function LoginScreen() {
   useEffect(() => {
     if (step === "otp") setTimeout(() => otpRefs.current[0]?.focus(), 100);
   }, [step]);
+
+  // Handle Firebase SMS auto-retrieval (Android reads SMS automatically and signs
+  // the user in silently — if we don't catch this, manual OTP entry shows "expired")
+  useEffect(() => {
+    if (step !== "otp") return;
+    autoHandledRef.current = false;
+
+    const unsub = auth().onAuthStateChanged(async (firebaseUser) => {
+      if (!firebaseUser || autoHandledRef.current) return;
+      // Only handle if the auto-verified phone matches what the user entered
+      if (firebaseUser.phoneNumber !== `+91${phone}`) return;
+      autoHandledRef.current = true;
+      setLoading(true);
+      try {
+        const idToken = await firebaseUser.getIdToken();
+        const { token, parent } = await verifyFirebaseToken(idToken);
+        await AsyncStorage.setItem("auth_token", token);
+        await AsyncStorage.setItem("parent", JSON.stringify(parent));
+        login(phone);
+        router.replace("/(tabs)");
+        registerForPushNotifications()
+          .then(pt => { if (pt) savePushToken(parent.id, pt); })
+          .catch(() => {});
+      } catch {
+        autoHandledRef.current = false;
+        setLoading(false);
+      }
+    });
+
+    return () => unsub();
+  }, [step, phone]);
 
   function startOtpTimer() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -105,6 +137,25 @@ export default function LoginScreen() {
       const code = (err as { code?: string }).code ?? "";
       const msg = err instanceof Error ? err.message : "OTP verification failed.";
       if (code === "auth/session-expired" || code === "auth/code-expired") {
+        // Auto-retrieval may have already signed the user in silently
+        const autoUser = auth().currentUser;
+        if (autoUser?.phoneNumber === `+91${phone}` && !autoHandledRef.current) {
+          autoHandledRef.current = true;
+          try {
+            const idToken = await autoUser.getIdToken();
+            const { token, parent } = await verifyFirebaseToken(idToken);
+            await AsyncStorage.setItem("auth_token", token);
+            await AsyncStorage.setItem("parent", JSON.stringify(parent));
+            login(phone);
+            router.replace("/(tabs)");
+            registerForPushNotifications()
+              .then(pt => { if (pt) savePushToken(parent.id, pt); })
+              .catch(() => {});
+            return;
+          } catch {
+            autoHandledRef.current = false;
+          }
+        }
         setOtpDigits(Array(OTP_LENGTH).fill(""));
         setError("OTP expired. Tap 'Resend OTP' to get a new code.");
         if (timerRef.current) clearInterval(timerRef.current);
