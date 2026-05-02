@@ -44,13 +44,15 @@ function NotificationListener() {
           }),
         });
 
-        async function saveNotification(title: string, body: string, id: string) {
+        async function saveNotification(title: string, body: string, data: Record<string, unknown>, id: string) {
           try {
+            const finalTitle = title || (typeof data?.title === "string" ? data.title : "") || "KAP Edutech";
+            const finalBody  = body  || (typeof data?.body  === "string" ? data.body  : "");
             const raw = await AsyncStorage.getItem("notifications");
             const existing = raw ? JSON.parse(raw) : [];
             if (existing.some((n: { id: string }) => n.id === id)) return;
             const updated = [
-              { id, title: title || "KAP Edutech", body: body || "", time: new Date().toISOString(), read: false },
+              { id, title: finalTitle, body: finalBody, time: new Date().toISOString(), read: false },
               ...existing,
             ].slice(0, 50);
             await AsyncStorage.setItem("notifications", JSON.stringify(updated));
@@ -60,15 +62,17 @@ function NotificationListener() {
         receivedSub = Notifications.addNotificationReceivedListener((notification) => {
           const title = notification.request.content.title ?? "";
           const body = notification.request.content.body ?? "";
+          const data = (notification.request.content.data ?? {}) as Record<string, unknown>;
           const id = notification.request.identifier;
-          saveNotification(title, body, id);
+          saveNotification(title, body, data, id);
         });
 
         responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
           const title = response.notification.request.content.title ?? "";
           const body = response.notification.request.content.body ?? "";
+          const data = (response.notification.request.content.data ?? {}) as Record<string, unknown>;
           const id = response.notification.request.identifier;
-          saveNotification(title, body, id);
+          saveNotification(title, body, data, id);
         });
       } catch (e) {
         console.log("[NotificationListener] skipped:", e);

@@ -190,175 +190,253 @@ export default function ScanPage() {
     status === "already_marked" ? "#D97706" :
     status === "not_found" || status === "error" ? "#DC2626" :
     status === "verifying" ? "#7C3AED" :
-    "#4F46E5";
+    "#1FA8E0";
 
   return (
     <main style={{
-      minHeight: "100vh", background: "#F8F9FC",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "space-between",
+      minHeight: "100vh",
+      background: "#070B14",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "space-between",
       padding: "24px 16px",
       fontFamily: "'Inter', system-ui, sans-serif",
+      position: "relative",
+      overflow: "hidden",
     }}>
 
+      {/* Background blobs */}
+      <div style={{
+        position: "absolute", top: -60, right: -60,
+        width: 340, height: 340, borderRadius: "50%",
+        background: "rgba(31,168,224,0.22)",
+        filter: "blur(80px)",
+        pointerEvents: "none", zIndex: 0,
+      }} />
+      <div style={{
+        position: "absolute", bottom: -40, left: -60,
+        width: 280, height: 280, borderRadius: "50%",
+        background: "rgba(79,70,229,0.18)",
+        filter: "blur(70px)",
+        pointerEvents: "none", zIndex: 0,
+      }} />
+
       {/* HEADER */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "100%" }}>
-        <div style={{ background: "#FFFFFF", borderRadius: 16, padding: "12px 28px", border: "1px solid #E5E7EB", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-          <Image src="/kap_fav.png" alt="KAP Edutech" width={180} height={56} priority style={{ height: "clamp(44px,6vh,60px)", width: "auto", objectFit: "contain" }} />
-          <div style={{ fontSize: 10, color: "#9CA3AF", letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Attendance System</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#16A34A" }} />
-          <span style={{ color: "#6B7280", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Live Session</span>
-        </div>
-      </div>
-
-      {/* SCANNER */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, width: "100%", position: "relative", zIndex: 1 }}>
         <div style={{
-          position: "relative", width: boxSize, height: boxSize,
-          borderRadius: 20, overflow: "hidden",
-          border: `2px solid ${borderColor}`,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
-          background: "#000",
-          transition: "border-color 0.2s ease",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          borderRadius: 20,
+          padding: "16px 32px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
         }}>
-          {/* Native video feed (BarcodeDetector path) */}
-          <video
-            ref={videoRef}
-            muted playsInline autoPlay
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
-
-          {/* html5-qrcode fallback div — hidden unless needed */}
-          <div id="qr-fallback" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
-
-          {/* Scan line animation */}
-          {status === "idle" && (
-            <div style={{
-              position: "absolute", left: "5%", right: "5%", height: 2,
-              background: "linear-gradient(90deg, transparent, #4F46E5, #818CF8, #4F46E5, transparent)",
-              borderRadius: 2, zIndex: 10, pointerEvents: "none",
-              animation: "scanline 1.8s ease-in-out infinite",
-              boxShadow: "0 0 10px 3px rgba(79,70,229,0.5)",
-            }} />
-          )}
-
-          {/* Corner accents */}
-          {([
-            { top: 10, left: 10, borderTop: `3px solid ${borderColor}`, borderLeft: `3px solid ${borderColor}`, borderRadius: "10px 0 0 0" },
-            { top: 10, right: 10, borderTop: `3px solid ${borderColor}`, borderRight: `3px solid ${borderColor}`, borderRadius: "0 10px 0 0" },
-            { bottom: 10, left: 10, borderBottom: `3px solid ${borderColor}`, borderLeft: `3px solid ${borderColor}`, borderRadius: "0 0 0 10px" },
-            { bottom: 10, right: 10, borderBottom: `3px solid ${borderColor}`, borderRight: `3px solid ${borderColor}`, borderRadius: "0 0 10px 0" },
-          ] as React.CSSProperties[]).map((s, i) => (
-            <div key={i} style={{ position: "absolute", width: 28, height: 28, pointerEvents: "none", zIndex: 10, ...s }} />
-          ))}
-
-          {/* Camera error */}
-          {camError && (
-            <div style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", borderRadius: 18, padding: 24, textAlign: "center" }}>
-              <p style={{ color: "#FCA5A5", fontWeight: 600, fontSize: 14 }}>{camError}</p>
-            </div>
-          )}
-
-          {/* Result overlay */}
-          {status !== "idle" && !camError && (
-            <div style={{
-              position: "absolute", inset: 0, zIndex: 20,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              background:
-                status === "verifying" ? "rgba(245,243,255,0.97)" :
-                status === "success" ? "rgba(240,253,244,0.97)" :
-                status === "punch_out" ? "rgba(239,246,255,0.97)" :
-                status === "already_marked" ? "rgba(255,251,235,0.97)" :
-                "rgba(254,242,242,0.97)",
-              borderRadius: 18, padding: 28, textAlign: "center",
-            }}>
-              {status === "verifying" && (
-                <>
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#EDE9FE", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 0.8s linear infinite" }}>
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                  </div>
-                  <span style={{ color: "#6D28D9", fontSize: 12, fontWeight: 700, letterSpacing: 1 }}>Verifying...</span>
-                </>
-              )}
-
-              {status === "success" && result && (
-                <>
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#DCFCE7", border: "2px solid #16A34A", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  </div>
-                  <span style={{ color: "#15803D", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, display: "block" }}>Attendance Marked</span>
-                  <p style={{ color: "#111827", fontWeight: 800, fontSize: "clamp(18px,3.5vw,26px)", margin: "0 0 4px" }}>{result.studentName}</p>
-                  <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 16px" }}>Checked in at <span style={{ color: "#15803D", fontWeight: 700 }}>{result.time}</span></p>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-                    <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "#C2410C", fontSize: 11, fontWeight: 700 }}>🔥 Keep the streak!</div></div>
-                    <div style={{ background: "#EEF2FF", border: "1px solid #C7D2FE", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "#4338CA", fontSize: 11, fontWeight: 700 }}>🏆 Aim for Rank 1!</div></div>
-                  </div>
-                </>
-              )}
-
-              {status === "punch_out" && result && (
-                <>
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#DBEAFE", border: "2px solid #2563EB", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                  </div>
-                  <span style={{ color: "#1D4ED8", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, display: "block" }}>Punched Out</span>
-                  <p style={{ color: "#111827", fontWeight: 800, fontSize: "clamp(18px,3.5vw,26px)", margin: "0 0 4px" }}>{result.studentName}</p>
-                  <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 16px" }}>Checked out at <span style={{ color: "#1D4ED8", fontWeight: 700 }}>{result.time}</span></p>
-                  <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "#1D4ED8", fontSize: 11, fontWeight: 700 }}>See you tomorrow! 👋</div></div>
-                </>
-              )}
-
-              {status === "already_marked" && (
-                <>
-                  <div style={{ fontSize: 44, marginBottom: 12 }}>✅</div>
-                  <p style={{ color: "#92400E", fontWeight: 800, fontSize: 20, margin: "0 0 6px" }}>Already Marked</p>
-                  <p style={{ color: "#6B7280", fontSize: 13, margin: 0 }}>{errorMsg}</p>
-                </>
-              )}
-
-              {(status === "not_found" || status === "error") && (
-                <>
-                  <div style={{ fontSize: 44, marginBottom: 12 }}>⚠️</div>
-                  <p style={{ color: "#991B1B", fontWeight: 800, fontSize: 20, margin: "0 0 6px" }}>{status === "not_found" ? "Not Registered" : "Error"}</p>
-                  <p style={{ color: "#6B7280", fontSize: 13, margin: 0 }}>{errorMsg}</p>
-                </>
-              )}
-            </div>
-          )}
+          <Image src="/kap_fav.png" alt="KAP Edutech" width={180} height={56} priority style={{ height: "clamp(44px,6vh,60px)", width: "auto", objectFit: "contain" }} />
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.50)", letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Attendance System</div>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <p style={{ color: "#9CA3AF", fontSize: 13, margin: 0 }}>
-            {status === "idle" ? "Point camera at QR code" : status === "verifying" ? "QR detected — saving..." : "Ready for next student"}
-          </p>
-          <button
-            onClick={() => setFacing(f => f === "environment" ? "user" : "environment")}
-            title="Flip camera"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "7px 14px", borderRadius: 20,
-              border: "1px solid #E5E7EB", background: "#FFFFFF",
-              color: "#374151", fontSize: 12, fontWeight: 600,
-              cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 7h-9"/><path d="M14 17H5"/><polyline points="17 4 20 7 17 10"/><polyline points="7 14 4 17 7 20"/>
-            </svg>
-            {facing === "environment" ? "Back" : "Front"}
-          </button>
+        {/* Live session badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#16A34A", boxShadow: "0 0 6px #16A34A" }} />
+          <span style={{ color: "#FFFFFF", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700, opacity: 0.85 }}>Live Session</span>
         </div>
       </div>
 
-      {/* FOOTER CLOCK */}
-      <div style={{ textAlign: "center" }}>
-        <div style={{ background: "#FFFFFF", borderRadius: 14, padding: "10px 28px", border: "1px solid #E5E7EB", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <p style={{ fontFamily: "monospace", fontWeight: 800, color: "#111827", fontSize: "clamp(20px,3.2vw,30px)", margin: 0, letterSpacing: 2 }}>{timeStr}</p>
-          <p style={{ color: "#9CA3AF", fontSize: "clamp(10px,1.4vw,13px)", margin: "3px 0 0" }}>{dateStr}</p>
+      {/* MAIN CONTENT AREA — tablet: row layout */}
+      <div className="scan-content-row" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, position: "relative", zIndex: 1, width: "100%", maxWidth: 960 }}>
+
+        {/* SCANNER COLUMN */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, flex: 1 }}>
+          <div style={{
+            position: "relative", width: boxSize, height: boxSize,
+            borderRadius: 20, overflow: "hidden",
+            border: `2px solid ${borderColor}`,
+            boxShadow: status === "idle"
+              ? `0 0 40px rgba(31,168,224,0.15), 0 4px 24px rgba(0,0,0,0.40)`
+              : `0 0 24px rgba(0,0,0,0.40)`,
+            background: "#000",
+            transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+          }}>
+            {/* Native video feed (BarcodeDetector path) */}
+            <video
+              ref={videoRef}
+              muted playsInline autoPlay
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+
+            {/* html5-qrcode fallback div — hidden unless needed */}
+            <div id="qr-fallback" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+
+            {/* Scan line animation */}
+            {status === "idle" && (
+              <div style={{
+                position: "absolute", left: "5%", right: "5%", height: 2,
+                background: "linear-gradient(90deg, transparent, #1FA8E0, #818CF8, #1FA8E0, transparent)",
+                borderRadius: 2, zIndex: 10, pointerEvents: "none",
+                animation: "scanline 1.8s ease-in-out infinite",
+                boxShadow: "0 0 10px 3px rgba(31,168,224,0.5)",
+              }} />
+            )}
+
+            {/* Corner accents */}
+            {([
+              { top: 10, left: 10, borderTop: `3px solid ${borderColor}`, borderLeft: `3px solid ${borderColor}`, borderRadius: "10px 0 0 0" },
+              { top: 10, right: 10, borderTop: `3px solid ${borderColor}`, borderRight: `3px solid ${borderColor}`, borderRadius: "0 10px 0 0" },
+              { bottom: 10, left: 10, borderBottom: `3px solid ${borderColor}`, borderLeft: `3px solid ${borderColor}`, borderRadius: "0 0 0 10px" },
+              { bottom: 10, right: 10, borderBottom: `3px solid ${borderColor}`, borderRight: `3px solid ${borderColor}`, borderRadius: "0 0 10px 0" },
+            ] as React.CSSProperties[]).map((s, i) => (
+              <div key={i} style={{ position: "absolute", width: 28, height: 28, pointerEvents: "none", zIndex: 10, ...s }} />
+            ))}
+
+            {/* Camera error */}
+            {camError && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(7,11,20,0.92)", borderRadius: 18, padding: 24, textAlign: "center" }}>
+                <p style={{ color: "#FCA5A5", fontWeight: 600, fontSize: 14 }}>{camError}</p>
+              </div>
+            )}
+
+            {/* Result overlay */}
+            {status !== "idle" && !camError && (
+              <div style={{
+                position: "absolute", inset: 0, zIndex: 20,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                background: "rgba(7,11,20,0.92)",
+                borderRadius: 18, padding: 28, textAlign: "center",
+              }}>
+                {status === "verifying" && (
+                  <>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 0.8s linear infinite" }}>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      </svg>
+                    </div>
+                    <span style={{ color: "#A78BFA", fontSize: 12, fontWeight: 700, letterSpacing: 1 }}>Verifying...</span>
+                  </>
+                )}
+
+                {status === "success" && result && (
+                  <>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #16A34A", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    </div>
+                    <span style={{ color: "#4ADE80", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, display: "block" }}>Attendance Marked</span>
+                    <p style={{ color: "#FFFFFF", fontWeight: 800, fontSize: "clamp(18px,3.5vw,26px)", margin: "0 0 4px" }}>{result.studentName}</p>
+                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, margin: "0 0 16px" }}>Checked in at <span style={{ color: "#4ADE80", fontWeight: 700 }}>{result.time}</span></p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                      <div style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700 }}>Keep the streak!</div></div>
+                      <div style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700 }}>Aim for Rank 1!</div></div>
+                    </div>
+                  </>
+                )}
+
+                {status === "punch_out" && result && (
+                  <>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #2563EB", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                    </div>
+                    <span style={{ color: "#60A5FA", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, display: "block" }}>Punched Out</span>
+                    <p style={{ color: "#FFFFFF", fontWeight: 800, fontSize: "clamp(18px,3.5vw,26px)", margin: "0 0 4px" }}>{result.studentName}</p>
+                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, margin: "0 0 16px" }}>Checked out at <span style={{ color: "#60A5FA", fontWeight: 700 }}>{result.time}</span></p>
+                    <div style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700 }}>See you tomorrow!</div></div>
+                  </>
+                )}
+
+                {status === "already_marked" && (
+                  <>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #D97706", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FCD34D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    </div>
+                    <p style={{ color: "#FCD34D", fontWeight: 800, fontSize: 20, margin: "0 0 6px" }}>Already Marked</p>
+                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, margin: 0 }}>{errorMsg}</p>
+                  </>
+                )}
+
+                {(status === "not_found" || status === "error") && (
+                  <>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid #DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FCA5A5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                    </div>
+                    <p style={{ color: "#FCA5A5", fontWeight: 800, fontSize: 20, margin: "0 0 6px" }}>{status === "not_found" ? "Not Registered" : "Error"}</p>
+                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, margin: 0 }}>{errorMsg}</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Below scanner: hint + flip button */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <p style={{ color: "rgba(255,255,255,0.50)", fontSize: 13, margin: 0 }}>
+              {status === "idle" ? "Point camera at QR code" : status === "verifying" ? "QR detected — saving..." : "Ready for next student"}
+            </p>
+            <button
+              onClick={() => setFacing(f => f === "environment" ? "user" : "environment")}
+              title="Flip camera"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 20,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                color: "#FFFFFF", fontSize: 12, fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 7h-9"/><path d="M14 17H5"/><polyline points="17 4 20 7 17 10"/><polyline points="7 14 4 17 7 20"/>
+              </svg>
+              {facing === "environment" ? "Back" : "Front"}
+            </button>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL — clock (tablet: shown in panel; mobile: separate bottom block) */}
+        <div className="scan-right-panel" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, width: "100%" }}>
+          <div style={{
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 20,
+            padding: "28px 36px",
+            textAlign: "center",
+            width: "100%",
+            maxWidth: 320,
+          }}>
+            {/* Status dot */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 16 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: "50%",
+                background: status === "success" ? "#4ADE80" : status === "punch_out" ? "#60A5FA" : status === "verifying" ? "#A78BFA" : status === "already_marked" ? "#FCD34D" : (status === "not_found" || status === "error") ? "#FCA5A5" : "#1FA8E0",
+                boxShadow: `0 0 8px ${status === "success" ? "#4ADE80" : status === "punch_out" ? "#60A5FA" : status === "verifying" ? "#A78BFA" : "#1FA8E0"}`,
+              }} />
+              <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+                {status === "idle" ? "Ready" : status === "verifying" ? "Verifying" : status === "success" ? "Marked" : status === "punch_out" ? "Punched Out" : status === "already_marked" ? "Already Marked" : "Error"}
+              </span>
+            </div>
+            <p style={{ fontFamily: "monospace", fontWeight: 800, color: "#FFFFFF", fontSize: "clamp(26px,4vw,40px)", margin: 0, letterSpacing: 3 }}>{timeStr}</p>
+            <p style={{ color: "rgba(255,255,255,0.40)", fontSize: "clamp(11px,1.4vw,13px)", margin: "8px 0 0" }}>{dateStr}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* MOBILE FOOTER CLOCK — hidden on tablet via CSS */}
+      <div className="scan-footer-clock" style={{ textAlign: "center", position: "relative", zIndex: 1 }}>
+        <div style={{
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          borderRadius: 14,
+          padding: "10px 28px",
+        }}>
+          <p style={{ fontFamily: "monospace", fontWeight: 800, color: "#FFFFFF", fontSize: "clamp(20px,3.2vw,30px)", margin: 0, letterSpacing: 2 }}>{timeStr}</p>
+          <p style={{ color: "rgba(255,255,255,0.40)", fontSize: "clamp(10px,1.4vw,13px)", margin: "3px 0 0" }}>{dateStr}</p>
         </div>
       </div>
 
@@ -375,6 +453,32 @@ export default function ScanPage() {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
+        }
+
+        /* Tablet layout: side by side */
+        @media (min-width: 900px) {
+          .scan-content-row {
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 40px !important;
+          }
+          .scan-right-panel {
+            display: flex !important;
+          }
+          .scan-footer-clock {
+            display: none !important;
+          }
+        }
+
+        /* Mobile: hide right panel clock, show footer clock */
+        @media (max-width: 899px) {
+          .scan-right-panel {
+            display: none !important;
+          }
+          .scan-footer-clock {
+            display: block !important;
+          }
         }
       `}</style>
     </main>

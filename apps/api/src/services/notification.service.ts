@@ -9,7 +9,7 @@ export async function sendPushNotification(
     console.log(`[Notification] No push token — skipping.`);
     return;
   }
-  const payload = { to: pushToken, title, body, sound: "default" };
+  const payload = { to: pushToken, title, body, sound: "default", data: { title, body } };
   console.log(`[Notification] Sending: "${title}" → ${pushToken}`);
   const res = await fetch(EXPO_PUSH_URL, {
     method: "POST",
@@ -31,7 +31,7 @@ export async function sendBatchPushNotifications(
     const res = await fetch(EXPO_PUSH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(valid.map(m => ({ ...m, sound: "default" }))),
+      body: JSON.stringify(valid.map(m => ({ ...m, sound: "default", data: { title: m.title, body: m.body } }))),
     });
     const data = await res.json();
     console.log(`[Notification] Batch response:`, JSON.stringify(data));

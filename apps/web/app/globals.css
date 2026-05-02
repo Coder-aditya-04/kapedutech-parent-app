@@ -23,6 +23,10 @@
   --admin-input-bg:         #FAFAFA;
   --admin-page-bg:          #F4F4F5;
   --admin-accent:           #1D6BF3;
+  --admin-glass-bg:         rgba(255,255,255,0.72);
+  --admin-glass-border:     rgba(255,255,255,0.90);
+  --admin-glass-shadow:     0 4px 24px rgba(0,0,0,0.07);
+  --admin-accent-2:         #1FA8E0;
 }
 
 .dark {
@@ -41,6 +45,10 @@
   --admin-input-bg:         #27272A;
   --admin-page-bg:          #09090B;
   --admin-accent:           #3B82F6;
+  --admin-glass-bg:         rgba(22,28,46,0.82);
+  --admin-glass-border:     rgba(255,255,255,0.08);
+  --admin-glass-shadow:     0 4px 24px rgba(0,0,0,0.30);
+  --admin-accent-2:         #1FA8E0;
 }
 
 @theme inline {
@@ -103,7 +111,7 @@ body {
   z-index: 40;
   border-right: 1px solid var(--admin-sidebar-border);
   box-shadow: 1px 0 0 var(--admin-sidebar-border),
-              4px 0 24px rgba(0,0,0,0.04);
+              4px 0 32px rgba(31,168,224,0.06);
   transition: transform 0.25s cubic-bezier(0.16,1,0.3,1);
 }
 
@@ -195,4 +203,33 @@ body {
 @media (max-width: 480px) {
   .stat-grid  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .card-grid  { grid-template-columns: 1fr; }
+}
+
+/* ── Glass card ─────────────────────────────────────────────────────────────*/
+.glass-card {
+  background: var(--admin-glass-bg);
+  border: 1px solid var(--admin-glass-border);
+  box-shadow: var(--admin-glass-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── Accent gradient text ───────────────────────────────────────────────────*/
+.gradient-text {
+  background: linear-gradient(135deg, #1FA8E0, #4F46E5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Accent gradient background ─────────────────────────────────────────────*/
+.gradient-bg {
+  background: linear-gradient(135deg, #1FA8E0, #4F46E5);
+}
+
+/* ── Sidebar glass (dark) ───────────────────────────────────────────────────*/
+.dark .admin-sidebar {
+  background: rgba(15,15,17,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
