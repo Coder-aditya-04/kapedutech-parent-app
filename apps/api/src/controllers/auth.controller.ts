@@ -238,7 +238,7 @@ export async function verifyFirebasePhone(req: Request, res: Response): Promise<
     where: { phone: normalizedPhone },
     include: {
       students: {
-        select: { id: true, name: true, enrollmentNo: true, qrCode: true },
+        select: { id: true, name: true, enrollmentNo: true, batch: true, qrCode: true },
       },
     },
   });

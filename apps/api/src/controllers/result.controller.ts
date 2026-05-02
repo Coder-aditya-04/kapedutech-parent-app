@@ -98,7 +98,7 @@ export async function getTestResults(req: Request, res: Response): Promise<void>
   res.json(results);
 }
 
-// Parent/mobile: get results for a specific student
+// Parent/mobile: get results for a specific student (with class averages per subject)
 export async function getStudentResults(req: Request, res: Response): Promise<void> {
   const { studentId } = req.params;
   const results = await prisma.testResult.findMany({
@@ -106,5 +106,36 @@ export async function getStudentResults(req: Request, res: Response): Promise<vo
     orderBy: { testDate: "desc" },
     take: 20,
   });
-  res.json(results);
+
+  if (!results.length) { res.json([]); return; }
+
+  // One query to fetch all classmates' scores for these tests
+  const allBatch = await prisma.testResult.findMany({
+    where: { OR: results.map(r => ({ testName: r.testName, testDate: r.testDate })) },
+    select: { testName: true, testDate: true, scores: true },
+  });
+
+  // Group by "testName||testDate"
+  const batchMap = new Map<string, Record<string, number>[]>();
+  for (const br of allBatch) {
+    const key = `${br.testName}||${br.testDate}`;
+    if (!batchMap.has(key)) batchMap.set(key, []);
+    batchMap.get(key)!.push(br.scores as Record<string, number>);
+  }
+
+  const enriched = results.map(r => {
+    const key = `${r.testName}||${r.testDate}`;
+    const batchScores = batchMap.get(key) ?? [];
+    const studentScores = r.scores as Record<string, number>;
+    const classAvgScores: Record<string, number> = {};
+    for (const subj of Object.keys(studentScores)) {
+      const vals = batchScores.map(s => s[subj]).filter((v): v is number => typeof v === "number");
+      classAvgScores[subj] = vals.length
+        ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10
+        : 0;
+    }
+    return { ...r, classAvgScores };
+  });
+
+  res.json(enriched);
 }
