@@ -121,6 +121,8 @@ export default function LoginScreen() {
     if (otp.length !== OTP_LENGTH) { setError("Enter the 6-digit OTP."); return; }
     if (!confirmationRef.current) { setError("Session expired. Please resend OTP."); return; }
     setError(""); setLoading(true);
+    // Claim the slot before confirm() so onAuthStateChanged doesn't race us
+    autoHandledRef.current = true;
     try {
       const credential = await confirmationRef.current.confirm(otp);
       if (!credential?.user) throw new Error("Verification failed.");
@@ -162,6 +164,7 @@ export default function LoginScreen() {
         setOtpTimer(0);
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else {
+        autoHandledRef.current = false; // allow retry
         setError(msg || "Verification failed. Please try again.");
       }
     } finally { setLoading(false); }
