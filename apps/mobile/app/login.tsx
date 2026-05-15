@@ -46,10 +46,10 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [otpTimer, setOtpTimer] = useState(0);
-  const confirmationRef = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
+  const verificationIdRef = useRef<string | null>(null);
   const otpRefs = useRef<(RNTextInput | null)[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoHandledRef = useRef(false);
+  const verifyUnsubRef = useRef<(() => void) | null>(null);
 
   const inputBg = t.dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.92)";
   const inputBorder = t.dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.9)";
@@ -57,37 +57,6 @@ export default function LoginScreen() {
   useEffect(() => {
     if (step === "otp") setTimeout(() => otpRefs.current[0]?.focus(), 100);
   }, [step]);
-
-  // Handle Firebase SMS auto-retrieval (Android reads SMS automatically and signs
-  // the user in silently — if we don't catch this, manual OTP entry shows "expired")
-  useEffect(() => {
-    if (step !== "otp") return;
-    autoHandledRef.current = false;
-
-    const unsub = auth().onAuthStateChanged(async (firebaseUser) => {
-      if (!firebaseUser || autoHandledRef.current) return;
-      // Only handle if the auto-verified phone matches what the user entered
-      if (firebaseUser.phoneNumber !== `+91${phone}`) return;
-      autoHandledRef.current = true;
-      setLoading(true);
-      try {
-        const idToken = await firebaseUser.getIdToken();
-        const { token, parent } = await verifyFirebaseToken(idToken);
-        await AsyncStorage.setItem("auth_token", token);
-        await AsyncStorage.setItem("parent", JSON.stringify(parent));
-        login(phone);
-        router.replace("/(tabs)");
-        registerForPushNotifications()
-          .then(pt => { if (pt) savePushToken(parent.id, pt); })
-          .catch(() => {});
-      } catch {
-        autoHandledRef.current = false;
-        setLoading(false);
-      }
-    });
-
-    return () => unsub();
-  }, [step, phone]);
 
   function startOtpTimer() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -100,74 +69,109 @@ export default function LoginScreen() {
     }, 1000);
   }
 
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    verifyUnsubRef.current?.();
+  }, []);
 
-  async function handleSendOtp() {
+  async function finishLogin(firebaseUser: FirebaseAuthTypes.User) {
+    const idToken = await firebaseUser.getIdToken(true);
+    const { token, parent } = await verifyFirebaseToken(idToken);
+    await AsyncStorage.setItem("auth_token", token);
+    await AsyncStorage.setItem("parent", JSON.stringify(parent));
+    login(phone);
+    router.replace("/(tabs)");
+    registerForPushNotifications()
+      .then(pt => { if (pt) savePushToken(parent.id, pt); })
+      .catch(() => {});
+  }
+
+  function handleSendOtp() {
     if (!/^\d{10}$/.test(phone)) { setError("Enter a valid 10-digit mobile number."); return; }
     setError(""); setLoading(true);
-    try {
-      const confirmation = await auth().signInWithPhoneNumber(`+91${phone}`);
-      confirmationRef.current = confirmation;
-      setOtpDigits(Array(OTP_LENGTH).fill(""));
-      setStep("otp");
-      startOtpTimer();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to send OTP.");
-    } finally { setLoading(false); }
+    verificationIdRef.current = null;
+
+    // Clean up any previous verifyPhoneNumber listener before starting a new one
+    verifyUnsubRef.current?.();
+
+    // Clear stale Firebase session on first send only
+    const startVerify = () => {
+      const unsub = auth().verifyPhoneNumber(`+91${phone}`)
+        .on("state_changed", (snapshot) => {
+          switch (snapshot.state) {
+
+            case auth.PhoneAuthState.CODE_SENT:
+              // SMS sent — store verificationId for manual entry
+              verificationIdRef.current = snapshot.verificationId;
+              setOtpDigits(Array(OTP_LENGTH).fill(""));
+              setStep("otp");
+              startOtpTimer();
+              setLoading(false);
+              break;
+
+            case auth.PhoneAuthState.AUTO_VERIFIED:
+              // Device auto-verified the OTP (fast devices, new OnePlus etc.)
+              auth().signInWithCredential(
+                auth.PhoneAuthProvider.credential(snapshot.verificationId, snapshot.code!)
+              ).then(r => { if (r.user) finishLogin(r.user); })
+               .catch(() => setLoading(false));
+              break;
+
+            case auth.PhoneAuthState.AUTO_VERIFY_TIMEOUT:
+              // OxygenOS / old Android killed the background process — this is the old OnePlus fix.
+              // verificationId is STILL valid for manual entry, session is NOT corrupted.
+              verificationIdRef.current = snapshot.verificationId;
+              setStep("otp");          // no-op if already on otp screen (resend)
+              startOtpTimer();
+              setLoading(false);
+              break;
+
+            case auth.PhoneAuthState.ERROR:
+              const code = (snapshot.error as { code?: string })?.code ?? "";
+              if (code === "auth/too-many-requests") {
+                setError("Too many OTP requests. Please wait a few minutes before trying again.");
+              } else {
+                setError(snapshot.error?.message || "Failed to send OTP.");
+              }
+              setLoading(false);
+              break;
+          }
+        });
+      verifyUnsubRef.current = unsub as unknown as () => void;
+    };
+
+    if (step === "phone") {
+      auth().signOut().catch(() => {}).finally(startVerify);
+    } else {
+      startVerify();
+    }
   }
 
   async function handleVerifyOtp() {
     const otp = otpDigits.join("");
     if (otp.length !== OTP_LENGTH) { setError("Enter the 6-digit OTP."); return; }
-    if (!confirmationRef.current) { setError("Session expired. Please resend OTP."); return; }
+    if (!verificationIdRef.current) { setError("Session expired. Please resend OTP."); return; }
     setError(""); setLoading(true);
-    // Claim the slot before confirm() so onAuthStateChanged doesn't race us
-    autoHandledRef.current = true;
     try {
-      const credential = await confirmationRef.current.confirm(otp);
-      if (!credential?.user) throw new Error("Verification failed.");
-      const idToken = await credential.user.getIdToken();
-      const { token, parent } = await verifyFirebaseToken(idToken);
-      await AsyncStorage.setItem("auth_token", token);
-      await AsyncStorage.setItem("parent", JSON.stringify(parent));
-      login(phone);
-      router.replace("/(tabs)");
-      registerForPushNotifications()
-        .then((pushToken) => { if (pushToken) savePushToken(parent.id, pushToken); })
-        .catch(() => {});
+      const credential = auth.PhoneAuthProvider.credential(verificationIdRef.current, otp);
+      const result = await auth().signInWithCredential(credential);
+      if (!result.user) throw new Error("Verification failed.");
+      await finishLogin(result.user);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? "";
-      const msg = err instanceof Error ? err.message : "OTP verification failed.";
-      if (code === "auth/session-expired" || code === "auth/code-expired") {
-        // Auto-retrieval may have already signed the user in silently
-        const autoUser = auth().currentUser;
-        if (autoUser?.phoneNumber === `+91${phone}` && !autoHandledRef.current) {
-          autoHandledRef.current = true;
-          try {
-            const idToken = await autoUser.getIdToken();
-            const { token, parent } = await verifyFirebaseToken(idToken);
-            await AsyncStorage.setItem("auth_token", token);
-            await AsyncStorage.setItem("parent", JSON.stringify(parent));
-            login(phone);
-            router.replace("/(tabs)");
-            registerForPushNotifications()
-              .then(pt => { if (pt) savePushToken(parent.id, pt); })
-              .catch(() => {});
-            return;
-          } catch {
-            autoHandledRef.current = false;
-          }
-        }
+      if (code === "auth/invalid-verification-code") {
+        setError("Wrong OTP. Please check the SMS and try again.");
+      } else if (code === "auth/session-expired") {
         setOtpDigits(Array(OTP_LENGTH).fill(""));
         setError("OTP expired. Tap 'Resend OTP' to get a new code.");
         if (timerRef.current) clearInterval(timerRef.current);
         setOtpTimer(0);
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else {
-        autoHandledRef.current = false; // allow retry
-        setError(msg || "Verification failed. Please try again.");
+        setError((err instanceof Error ? err.message : "") || "Verification failed. Please try again.");
       }
-    } finally { setLoading(false); }
+      setLoading(false);
+    }
   }
 
   function handleOtpChange(value: string, index: number) {
@@ -304,7 +308,7 @@ export default function LoginScreen() {
           {/* Back button */}
           <View style={{ paddingHorizontal: 16, paddingTop: 8, zIndex: 2 }}>
             <TouchableOpacity
-              onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); confirmationRef.current = null; }}
+              onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); verificationIdRef.current = null; verifyUnsubRef.current?.(); }}
               style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: t.card, borderWidth: 1, borderColor: t.cardBorder, alignItems: "center", justifyContent: "center" }}
             >
               <Ionicons name="arrow-back" size={18} color={t.text2} />
@@ -329,7 +333,7 @@ export default function LoginScreen() {
               {" "}·{" "}
               <Text
                 style={{ color: ACCENT, fontWeight: "700" }}
-                onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); confirmationRef.current = null; }}
+                onPress={() => { setStep("phone"); setOtpDigits(Array(OTP_LENGTH).fill("")); setError(""); verificationIdRef.current = null; verifyUnsubRef.current?.(); }}
               >
                 Change
               </Text>
@@ -382,8 +386,14 @@ export default function LoginScreen() {
           {/* Resend */}
           <View style={{ alignItems: "center", marginTop: 20, zIndex: 2 }}>
             {otpTimer === 0 ? (
-              <TouchableOpacity onPress={() => { setOtpDigits(Array(OTP_LENGTH).fill("")); handleSendOtp(); }}>
-                <Text style={{ fontSize: 13, color: ACCENT, fontWeight: "700" }}>Resend OTP</Text>
+              <TouchableOpacity
+                disabled={loading}
+                onPress={() => { setOtpDigits(Array(OTP_LENGTH).fill("")); handleSendOtp(); }}
+                style={{ opacity: loading ? 0.4 : 1 }}
+              >
+                <Text style={{ fontSize: 13, color: ACCENT, fontWeight: "700" }}>
+                  {loading ? "Sending…" : "Resend OTP"}
+                </Text>
               </TouchableOpacity>
             ) : (
               <Text style={{ fontSize: 13, color: t.text3 }}>
