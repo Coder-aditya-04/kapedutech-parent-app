@@ -52,6 +52,30 @@ const S = {
   optionalBadge: { fontSize: 10, fontWeight: 600, color: "var(--admin-text-faint)", background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 6, padding: "1px 6px", marginLeft: 6, verticalAlign: "middle" as const },
 } as const;
 
+function FormFields({ values, onChange }: { values: Record<string, string>; onChange: (k: string, v: string) => void }) {
+  const fields = [
+    { label: "Student Name", key: "name", type: "text", placeholder: "Full name", required: true },
+    { label: "Enrollment No", key: "enrollmentNo", type: "text", placeholder: "e.g. JEE2026-001", required: true },
+    { label: "Parent Name", key: "parentName", type: "text", placeholder: "Parent full name", required: true },
+    { label: "Parent Phone (for SMS login)", key: "parentPhone", type: "tel", placeholder: "10 digit mobile", required: true },
+    { label: "Parent Email (for email login)", key: "parentEmail", type: "email", placeholder: "parent@email.com", required: false },
+  ];
+  return (
+    <>
+      {fields.map(f => (
+        <div key={f.key}>
+          <label style={S.label}>
+            {f.label}
+            {!f.required && <span style={S.optionalBadge}>optional</span>}
+          </label>
+          <input type={f.type} placeholder={f.placeholder} required={f.required} value={values[f.key] ?? ""}
+            onChange={e => onChange(f.key, e.target.value)} style={S.inp} />
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -172,30 +196,6 @@ export default function StudentsPage() {
     const i = batches.findIndex(b => b.name === name);
     return BATCH_COLORS[i % 6] ?? "#6B7280";
   };
-
-  function FormFields({ values, onChange }: { values: Record<string, string>; onChange: (k: string, v: string) => void }) {
-    const fields = [
-      { label: "Student Name", key: "name", type: "text", placeholder: "Full name", required: true },
-      { label: "Enrollment No", key: "enrollmentNo", type: "text", placeholder: "e.g. JEE2026-001", required: true },
-      { label: "Parent Name", key: "parentName", type: "text", placeholder: "Parent full name", required: true },
-      { label: "Parent Phone (for SMS login)", key: "parentPhone", type: "tel", placeholder: "10 digit mobile", required: true },
-      { label: "Parent Email (for email login)", key: "parentEmail", type: "email", placeholder: "parent@email.com", required: false },
-    ];
-    return (
-      <>
-        {fields.map(f => (
-          <div key={f.key}>
-            <label style={S.label}>
-              {f.label}
-              {!f.required && <span style={S.optionalBadge}>optional</span>}
-            </label>
-            <input type={f.type} placeholder={f.placeholder} required={f.required} value={values[f.key] ?? ""}
-              onChange={e => onChange(f.key, e.target.value)} style={S.inp} />
-          </div>
-        ))}
-      </>
-    );
-  }
 
   return (
     <div className="admin-page">
