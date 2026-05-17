@@ -97,6 +97,7 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
           id: true,
           name: true,
           enrollmentNo: true,
+          batch: true,
           qrCode: true,
         },
       },

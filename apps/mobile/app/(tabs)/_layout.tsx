@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { savePushToken } from "@/src/api/auth";
+import { useTheme, ACCENT } from "@/src/theme";
 
 // Notification storage is handled centrally in the root _layout.tsx
 // (with proper deduplication by notification ID). Do NOT add listeners here.
@@ -38,6 +39,7 @@ async function ensurePushToken() {
 
 export default function TabLayout() {
   const { phone } = useAuth();
+  const t = useTheme();
 
   useEffect(() => {
     if (!phone) {
@@ -51,17 +53,26 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#4F46E5",
-        tabBarInactiveTintColor: "#9CA3AF",
-        tabBarStyle: { backgroundColor: "#FFFFFF", borderTopColor: "#E5E7EB" },
+        tabBarActiveTintColor: ACCENT,
+        tabBarInactiveTintColor: t.text3,
+        tabBarStyle: {
+          backgroundColor: t.card,
+          borderTopColor: t.cardBorder,
+          borderTopWidth: 1,
+          paddingTop: 4,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", marginBottom: 2 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Dashboard",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="view-dashboard" color={color} size={size} />
+          title: "Home",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "home" : "home-outline"}
+              color={color} size={24}
+            />
           ),
         }}
       />
@@ -69,17 +80,35 @@ export default function TabLayout() {
         name="results"
         options={{
           title: "Results",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="chart-bar" color={color} size={size} />
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "chart-bar" : "chart-bar"}
+              color={color} size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="attendance"
+        options={{
+          title: "Attendance",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "calendar-month" : "calendar-month-outline"}
+              color={color} size={24}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Notifications",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="bell" color={color} size={size} />
+          title: "Alerts",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "bell" : "bell-outline"}
+              color={color} size={24}
+            />
           ),
         }}
       />
@@ -87,8 +116,11 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" color={color} size={size} />
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "account-circle" : "account-circle-outline"}
+              color={color} size={24}
+            />
           ),
         }}
       />

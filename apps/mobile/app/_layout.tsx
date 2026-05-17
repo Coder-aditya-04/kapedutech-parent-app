@@ -48,6 +48,8 @@ function NotificationListener() {
           try {
             const finalTitle = title || (typeof data?.title === "string" ? data.title : "") || "KAP Edutech";
             const finalBody  = body  || (typeof data?.body  === "string" ? data.body  : "");
+            // Skip notifications with no body — these are empty/system notifications
+            if (!finalBody.trim()) return;
             const raw = await AsyncStorage.getItem("notifications");
             const existing = raw ? JSON.parse(raw) : [];
             if (existing.some((n: { id: string }) => n.id === id)) return;

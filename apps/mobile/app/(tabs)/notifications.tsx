@@ -7,6 +7,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "expo-router";
 import { useTheme, ACCENT, ACCENT_2, GOOD } from "@/src/theme";
+import { getStudentAttendance, type AttendanceRecord } from "@/src/api/auth";
+import { useAuth } from "@/src/context/AuthContext";
 
 type StoredNotification = { id: string; title: string; body: string; time: string; read: boolean };
 
@@ -80,27 +82,67 @@ function Badge({ kind }: { kind: NotifKind }) {
   return null;
 }
 
+function attendanceToNotif(r: AttendanceRecord, studentName: string): StoredNotification {
+  const isIn = r.type === "PUNCH_IN";
+  const timeStr = new Date(r.markedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return {
+    id: `att-${r.id}`,
+    title: isIn ? "Punch In" : "Punch Out",
+    body: `${studentName} ${isIn ? "checked in" : "checked out"} at ${timeStr}`,
+    time: r.markedAt,
+    read: true,
+  };
+}
+
 export default function NotificationsScreen() {
   const t = useTheme();
+  const { activeStudentId } = useAuth();
   const [items, setItems] = useState<StoredNotification[]>([]);
   const [filter, setFilter] = useState<"all" | "attendance" | "results">("all");
 
   const load = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem("notifications");
-      if (raw) setItems(JSON.parse(raw));
+      const [raw, parentRaw, token] = await Promise.all([
+        AsyncStorage.getItem("notifications"),
+        AsyncStorage.getItem("parent"),
+        AsyncStorage.getItem("auth_token"),
+      ]);
+
+      const stored: StoredNotification[] = raw ? JSON.parse(raw) : [];
+
+      let attendanceNotifs: StoredNotification[] = [];
+      if (parentRaw && token) {
+        const parent = JSON.parse(parentRaw);
+        const student = (activeStudentId ? parent.students?.find((s: { id: string }) => s.id === activeStudentId) : null) ?? parent.students?.[0];
+        if (student) {
+          const records = await getStudentAttendance(student.id, token);
+          const storedIds = new Set(stored.map((n) => n.id));
+          attendanceNotifs = records
+            .slice(0, 40)
+            .map((r) => attendanceToNotif(r, student.name))
+            .filter((n) => !storedIds.has(n.id));
+        }
+      }
+
+      const merged = [...stored, ...attendanceNotifs].sort(
+        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
+      );
+      setItems(merged);
     } catch {}
-  }, []);
+  }, [activeStudentId]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function markAllRead() {
     const updated = items.map(n => ({ ...n, read: true }));
     setItems(updated);
-    await AsyncStorage.setItem("notifications", JSON.stringify(updated));
+    // Only persist push notifications — attendance records (att-*) are always re-fetched from API
+    const toPersist = updated.filter(n => !n.id.startsWith("att-")).slice(0, 50);
+    await AsyncStorage.setItem("notifications", JSON.stringify(toPersist));
   }
 
   const filtered = items.filter(n => {
+    if (!n.body?.trim()) return false; // hide empty/system notifications
     if (filter === "all") return true;
     const kind = classifyNotif(n);
     if (filter === "attendance") return kind === "punch_in" || kind === "punch_out";
