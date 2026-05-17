@@ -258,7 +258,7 @@ export default function ProfileScreen() {
             source={require("@/assets/images/kap_logo_transparent.png")}
             style={{ width: 160, height: 52 }}
             contentFit="contain"
-            tintColor="#1FA8E0"
+            tintColor={t.dark ? "white" : undefined}
           />
           <Text style={{ fontSize: 11, color: t.text3, fontWeight: "600" }}>v2.4.1 • © 2026 KAP Edutech</Text>
         </View>

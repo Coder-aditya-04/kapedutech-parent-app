@@ -266,7 +266,7 @@ export default function LoginScreen() {
 
             {/* Logo */}
             <View style={{ alignItems: "center", marginTop: 12, marginBottom: 20, zIndex: 2 }}>
-              <Image source={require("@/assets/images/kap_logo_transparent.png")} style={{ width: 200, height: 76 }} contentFit="contain" tintColor="#1FA8E0" />
+              <Image source={require("@/assets/images/kap_logo_transparent.png")} style={{ width: 200, height: 76 }} contentFit="contain" tintColor={t.dark ? "white" : undefined} />
             </View>
 
             {/* Eyebrow + title + subtitle */}
@@ -400,7 +400,7 @@ export default function LoginScreen() {
 
           {/* Logo */}
           <View style={{ alignItems: "center", marginTop: 12, marginBottom: 20, zIndex: 2 }}>
-            <Image source={require("@/assets/images/kap_logo_transparent.png")} style={{ width: 180, height: 68 }} contentFit="contain" tintColor="#1FA8E0" />
+            <Image source={require("@/assets/images/kap_logo_transparent.png")} style={{ width: 180, height: 68 }} contentFit="contain" tintColor={t.dark ? "white" : undefined} />
           </View>
 
           {/* Eyebrow + title */}
