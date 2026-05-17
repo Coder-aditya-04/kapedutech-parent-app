@@ -156,7 +156,7 @@ export async function dateAttendance(req: Request, res: Response): Promise<void>
 
 export async function importStudents(req: Request, res: Response): Promise<void> {
   const { rows } = req.body as {
-    rows?: { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string }[];
+    rows?: { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string; parentEmail?: string }[];
   };
   if (!rows?.length) { res.status(400).json({ message: "rows array is required." }); return; }
 
@@ -165,7 +165,7 @@ export async function importStudents(req: Request, res: Response): Promise<void>
   const errors: string[] = [];
 
   for (const row of rows) {
-    const { name, enrollmentNo, batch, parentName, parentPhone } = row;
+    const { name, enrollmentNo, batch, parentName, parentPhone, parentEmail } = row;
     if (!name || !enrollmentNo || !batch || !parentPhone) {
       errors.push(`Row skipped (missing fields): ${JSON.stringify(row)}`);
       skipped++;
@@ -174,7 +174,11 @@ export async function importStudents(req: Request, res: Response): Promise<void>
     try {
       let parent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
       if (!parent) {
-        parent = await prisma.parent.create({ data: { name: parentName || "Parent", phone: parentPhone } });
+        parent = await prisma.parent.create({
+          data: { name: parentName || "Parent", phone: parentPhone, email: parentEmail || null },
+        });
+      } else if (parentEmail && !parent.email) {
+        parent = await prisma.parent.update({ where: { id: parent.id }, data: { email: parentEmail } });
       }
       const existing = await prisma.student.findFirst({ where: { enrollmentNo } });
       if (existing) { skipped++; continue; }

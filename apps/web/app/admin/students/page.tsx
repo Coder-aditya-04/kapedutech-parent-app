@@ -1,14 +1,14 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 
-type Student = { id: string; name: string; enrollmentNo: string; batch: string; parent: { phone: string; name: string } };
+type Student = { id: string; name: string; enrollmentNo: string; batch: string; parent: { phone: string; name: string; email?: string | null } };
 type Batch = { id: string; name: string };
-type ImportRow = { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string };
+type ImportRow = { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string; parentEmail: string };
 
 function exportCSV(students: Student[]) {
   const rows = [
-    ["Name", "Enrollment No", "Batch", "Parent Name", "Parent Phone"],
-    ...students.map(s => [s.name, s.enrollmentNo, s.batch || "", s.parent?.name || "", s.parent?.phone || ""]),
+    ["Name", "Enrollment No", "Batch", "Parent Name", "Parent Phone", "Parent Email"],
+    ...students.map(s => [s.name, s.enrollmentNo, s.batch || "", s.parent?.name || "", s.parent?.phone || "", s.parent?.email || ""]),
   ];
   const csv = rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -30,11 +30,27 @@ function parseImportCSV(text: string): ImportRow[] {
       batch: get(["batch", "class"]),
       parentName: get(["parentname", "parent", "fathername"]),
       parentPhone: get(["parentphone", "phone", "mobile", "contact"]),
+      parentEmail: get(["parentemail", "email", "mail"]),
     };
   }).filter(r => r.name && r.parentPhone);
 }
 
 const BATCH_COLORS: Record<number, string> = { 0: "#0064E0", 1: "#6441D2", 2: "#059669", 3: "#D97706", 4: "#DC2626", 5: "#0891B2" };
+
+const S = {
+  card: { background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" },
+  th: { padding: "11px 18px", textAlign: "left" as const, color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: 0.7, background: "var(--admin-input-bg)" },
+  td: { padding: "13px 18px" },
+  inp: { width: "100%", padding: "10px 12px", border: "1.5px solid var(--admin-input-border)", borderRadius: 10, fontSize: 14, boxSizing: "border-box" as const, outline: "none", color: "var(--admin-text)", background: "var(--admin-input-bg)", fontFamily: "inherit" },
+  modal: { background: "var(--admin-card-bg)", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", margin: 16 },
+  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(3px)" },
+  label: { display: "block", fontSize: 13, fontWeight: 600, color: "var(--admin-text-muted)", marginBottom: 5 },
+  text: { color: "var(--admin-text)" },
+  muted: { color: "var(--admin-text-muted)" },
+  faint: { color: "var(--admin-text-faint)" },
+  row: { borderTop: "1px solid var(--admin-card-border)" },
+  optionalBadge: { fontSize: 10, fontWeight: 600, color: "var(--admin-text-faint)", background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 6, padding: "1px 6px", marginLeft: 6, verticalAlign: "middle" as const },
+} as const;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -42,11 +58,11 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: "", enrollmentNo: "", batch: "", parentName: "", parentPhone: "" });
+  const [form, setForm] = useState({ name: "", enrollmentNo: "", batch: "", parentName: "", parentPhone: "", parentEmail: "" });
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", enrollmentNo: "", batch: "", parentName: "", parentPhone: "" });
+  const [editForm, setEditForm] = useState({ name: "", enrollmentNo: "", batch: "", parentName: "", parentPhone: "", parentEmail: "" });
   const [deleteStudent, setDeleteStudent] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -79,12 +95,13 @@ export default function StudentsPage() {
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/students", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, parentEmail: form.parentEmail || undefined }),
       });
       if (res.ok) {
         showToast("Student added!", true);
         setShowModal(false);
-        setForm({ name: "", enrollmentNo: "", batch: batches[0]?.name || "", parentName: "", parentPhone: "" });
+        setForm({ name: "", enrollmentNo: "", batch: batches[0]?.name || "", parentName: "", parentPhone: "", parentEmail: "" });
         load();
       } else { showToast((await res.json()).message ?? "Failed", false); }
     } catch { showToast("Network error", false); }
@@ -93,7 +110,7 @@ export default function StudentsPage() {
 
   function openEdit(s: Student) {
     setEditStudent(s);
-    setEditForm({ name: s.name, enrollmentNo: s.enrollmentNo, batch: s.batch || batches[0]?.name || "", parentName: s.parent?.name ?? "", parentPhone: s.parent?.phone ?? "" });
+    setEditForm({ name: s.name, enrollmentNo: s.enrollmentNo, batch: s.batch || batches[0]?.name || "", parentName: s.parent?.name ?? "", parentPhone: s.parent?.phone ?? "", parentEmail: s.parent?.email ?? "" });
   }
 
   async function handleEditSubmit(e: React.FormEvent) {
@@ -102,7 +119,8 @@ export default function StudentsPage() {
     setEditing(true);
     try {
       const res = await fetch(`/api/admin/students/${editStudent.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm),
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...editForm, parentEmail: editForm.parentEmail || undefined }),
       });
       if (res.ok) { showToast("Student updated", true); setEditStudent(null); load(); }
       else { showToast((await res.json()).message ?? "Failed", false); }
@@ -155,14 +173,29 @@ export default function StudentsPage() {
     return BATCH_COLORS[i % 6] ?? "#6B7280";
   };
 
-  const fieldList = [
-    { label: "Student Name", key: "name", type: "text", placeholder: "Full name" },
-    { label: "Enrollment No", key: "enrollmentNo", type: "text", placeholder: "e.g. JEE2026-001" },
-    { label: "Parent Name", key: "parentName", type: "text", placeholder: "Parent full name" },
-    { label: "Parent Phone (for app login)", key: "parentPhone", type: "tel", placeholder: "10 digit mobile number" },
-  ];
-
-  const inp: React.CSSProperties = { width: "100%", padding: "10px 12px", border: "1.5px solid #E5E7EB", borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", color: "#111827", background: "#fff" };
+  function FormFields({ values, onChange }: { values: Record<string, string>; onChange: (k: string, v: string) => void }) {
+    const fields = [
+      { label: "Student Name", key: "name", type: "text", placeholder: "Full name", required: true },
+      { label: "Enrollment No", key: "enrollmentNo", type: "text", placeholder: "e.g. JEE2026-001", required: true },
+      { label: "Parent Name", key: "parentName", type: "text", placeholder: "Parent full name", required: true },
+      { label: "Parent Phone (for SMS login)", key: "parentPhone", type: "tel", placeholder: "10 digit mobile", required: true },
+      { label: "Parent Email (for email login)", key: "parentEmail", type: "email", placeholder: "parent@email.com", required: false },
+    ];
+    return (
+      <>
+        {fields.map(f => (
+          <div key={f.key}>
+            <label style={S.label}>
+              {f.label}
+              {!f.required && <span style={S.optionalBadge}>optional</span>}
+            </label>
+            <input type={f.type} placeholder={f.placeholder} required={f.required} value={values[f.key] ?? ""}
+              onChange={e => onChange(f.key, e.target.value)} style={S.inp} />
+          </div>
+        ))}
+      </>
+    );
+  }
 
   return (
     <div className="admin-page">
@@ -173,13 +206,13 @@ export default function StudentsPage() {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1C2B33", margin: 0 }}>Students</h1>
-          <p style={{ color: "#5D6C7B", marginTop: 4, fontSize: 14 }}>{loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""} enrolled`}</p>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Students</h1>
+          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14, margin: "4px 0 0" }}>{loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""} enrolled`}</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => exportCSV(students)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "1px solid #CED0D4", borderRadius: 100, background: "#fff", color: "#1C2B33", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => exportCSV(students)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "1px solid var(--admin-card-border)", borderRadius: 100, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export CSV
           </button>
@@ -187,7 +220,7 @@ export default function StudentsPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Import CSV
           </button>
-          <button onClick={() => setShowModal(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#0064E0", color: "#fff", border: "none", borderRadius: 100, padding: "9px 18px", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+          <button onClick={() => setShowModal(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--admin-accent)", color: "#fff", border: "none", borderRadius: 100, padding: "9px 18px", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add Student
           </button>
@@ -196,39 +229,45 @@ export default function StudentsPage() {
 
       {/* Search */}
       <div style={{ position: "relative", marginBottom: 20 }}>
-        <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input placeholder="Search by name or enrollment no..." value={search} onChange={e => setSearch(e.target.value)}
-          style={{ width: "100%", padding: "10px 14px 10px 40px", border: "1px solid #CED0D4", borderRadius: 8, fontSize: 14, boxSizing: "border-box", outline: "none", color: "#1C2B33", background: "#fff" }} />
+          style={{ ...S.inp, paddingLeft: 40, borderRadius: 8 }} />
       </div>
 
       {/* Table */}
-      <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #E5E7EB", overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" }}>
+      <div style={S.card}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ background: "#F9FAFB" }}>
-                {["Name", "Enrollment No", "Batch", "Parent Name", "Parent Phone", "Actions"].map(h => (
-                  <th key={h} style={{ padding: "11px 18px", textAlign: "left", color: "#9CA3AF", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7 }}>{h}</th>
+              <tr>
+                {["Name", "Enrollment No", "Batch", "Parent Name", "Parent Phone", "Parent Email", "Actions"].map(h => (
+                  <th key={h} style={S.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>Loading...</td></tr>
+                <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading...</td></tr>
               ) : students.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>No students found</td></tr>
+                <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No students found</td></tr>
               ) : students.map(s => (
-                <tr key={s.id} style={{ borderTop: "1px solid #F3F4F6" }}>
-                  <td style={{ padding: "13px 18px", fontWeight: 600, color: "#111827" }}>{s.name}</td>
-                  <td style={{ padding: "13px 18px", color: "#6B7280", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
-                  <td style={{ padding: "13px 18px" }}>
+                <tr key={s.id} style={S.row}>
+                  <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
+                  <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
+                  <td style={S.td}>
                     <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 100, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5, display: "inline-block" }}>{s.batch || "—"}</span>
                   </td>
-                  <td style={{ padding: "13px 18px", color: "#374151" }}>{s.parent?.name ?? "—"}</td>
-                  <td style={{ padding: "13px 18px", color: "#0064E0", fontSize: 13, fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
-                  <td style={{ padding: "13px 18px" }}>
+                  <td style={{ ...S.td, color: "var(--admin-text-muted)" }}>{s.parent?.name ?? "—"}</td>
+                  <td style={{ ...S.td, color: "var(--admin-accent)", fontSize: 13, fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
+                  <td style={{ ...S.td, color: "var(--admin-text-muted)", fontSize: 12 }}>
+                    {s.parent?.email
+                      ? <span style={{ color: "var(--admin-accent)" }}>{s.parent.email}</span>
+                      : <span style={{ color: "var(--admin-text-faint)", fontStyle: "italic" }}>not set</span>
+                    }
+                  </td>
+                  <td style={S.td}>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => openEdit(s)} style={{ width: 30, height: 30, border: "1px solid #E5E7EB", borderRadius: 8, background: "#fff", color: "#4F46E5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <button onClick={() => openEdit(s)} style={{ width: 30, height: 30, border: "1px solid var(--admin-card-border)", borderRadius: 8, background: "var(--admin-card-bg)", color: "#4F46E5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
                       <button onClick={() => setDeleteStudent(s)} style={{ width: 30, height: 30, border: "1px solid #FCA5A5", borderRadius: 8, background: "#FFF5F5", color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -245,30 +284,24 @@ export default function StudentsPage() {
 
       {/* Add Modal */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(2px)" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", margin: 16 }}>
+        <div style={S.overlay}>
+          <div style={S.modal}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Add New Student</h2>
-              <button onClick={() => setShowModal(false)} style={{ border: "none", background: "#F3F4F6", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "#6B7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Add New Student</h2>
+              <button onClick={() => setShowModal(false)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
             </div>
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {fieldList.map(f => (
-                <div key={f.key}>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 5 }}>{f.label}</label>
-                  <input type={f.type} placeholder={f.placeholder} required value={(form as Record<string, string>)[f.key]}
-                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp} />
-                </div>
-              ))}
+              <FormFields values={form} onChange={(k, v) => setForm(p => ({ ...p, [k]: v }))} />
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 5 }}>Batch</label>
-                <select value={form.batch} onChange={e => setForm(p => ({ ...p, batch: e.target.value }))} style={inp}>
+                <label style={S.label}>Batch</label>
+                <select value={form.batch} onChange={e => setForm(p => ({ ...p, batch: e.target.value }))} style={S.inp}>
                   {batches.length === 0 && <option value="">No batches — create one first</option>}
                   {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                <button type="button" onClick={() => setShowModal(false)} style={{ flex: 1, padding: "10px", border: "1.5px solid #E5E7EB", borderRadius: 10, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button type="submit" disabled={submitting} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "#0064E0", color: "#fff", fontSize: 14, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
+                <button type="button" onClick={() => setShowModal(false)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button type="submit" disabled={submitting} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "var(--admin-accent)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
                   {submitting ? "Adding..." : "Add Student"}
                 </button>
               </div>
@@ -279,29 +312,23 @@ export default function StudentsPage() {
 
       {/* Edit Modal */}
       {editStudent && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(2px)" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", margin: 16 }}>
+        <div style={S.overlay}>
+          <div style={S.modal}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Edit Student</h2>
-              <button onClick={() => setEditStudent(null)} style={{ border: "none", background: "#F3F4F6", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "#6B7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Edit Student</h2>
+              <button onClick={() => setEditStudent(null)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
             </div>
             <form onSubmit={handleEditSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {fieldList.map(f => (
-                <div key={f.key}>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 5 }}>{f.label}</label>
-                  <input type={f.type} placeholder={f.placeholder} required value={(editForm as Record<string, string>)[f.key]}
-                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp} />
-                </div>
-              ))}
+              <FormFields values={editForm} onChange={(k, v) => setEditForm(p => ({ ...p, [k]: v }))} />
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 5 }}>Batch</label>
-                <select value={editForm.batch} onChange={e => setEditForm(p => ({ ...p, batch: e.target.value }))} style={inp}>
+                <label style={S.label}>Batch</label>
+                <select value={editForm.batch} onChange={e => setEditForm(p => ({ ...p, batch: e.target.value }))} style={S.inp}>
                   {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                <button type="button" onClick={() => setEditStudent(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid #E5E7EB", borderRadius: 10, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button type="submit" disabled={editing} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "#0064E0", color: "#fff", fontSize: 14, fontWeight: 700, cursor: editing ? "not-allowed" : "pointer", opacity: editing ? 0.7 : 1 }}>
+                <button type="button" onClick={() => setEditStudent(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button type="submit" disabled={editing} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "var(--admin-accent)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: editing ? "not-allowed" : "pointer", opacity: editing ? 0.7 : 1 }}>
                   {editing ? "Saving..." : "Save Changes"}
                 </button>
               </div>
@@ -312,29 +339,31 @@ export default function StudentsPage() {
 
       {/* Import CSV Modal */}
       {showImport && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(2px)" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", margin: 16 }}>
+        <div style={S.overlay}>
+          <div style={{ ...S.modal, maxWidth: 520 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Import Students from CSV</h2>
-              <button onClick={() => { setShowImport(false); setImportRows([]); }} style={{ border: "none", background: "#F3F4F6", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "#6B7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Import Students from CSV</h2>
+              <button onClick={() => { setShowImport(false); setImportRows([]); }} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
             </div>
-            <div style={{ background: "#F0F9FF", border: "1px solid #BAE6FD", borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 13, color: "#0369A1" }}>
-              CSV must have headers: <strong>Name, EnrollmentNo, Batch, ParentName, ParentPhone</strong><br />
-              Students with existing enrollment numbers are skipped automatically.
+            <div style={{ background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--admin-text-muted)" }}>
+              Required columns: <strong style={{ color: "var(--admin-text)" }}>Name, EnrollmentNo, Batch, ParentName, ParentPhone</strong><br />
+              Optional: <strong style={{ color: "var(--admin-text)" }}>ParentEmail</strong> — add to enable email OTP login for that parent
             </div>
             <input type="file" accept=".csv" onChange={handleImportFile}
-              style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #E5E7EB", borderRadius: 10, fontSize: 14, boxSizing: "border-box", background: "#FAFAFA", marginBottom: 14 }} />
+              style={{ width: "100%", padding: "10px 12px", border: "1.5px solid var(--admin-input-border)", borderRadius: 10, fontSize: 14, boxSizing: "border-box", background: "var(--admin-input-bg)", color: "var(--admin-text)", marginBottom: 14 }} />
             {importRows.length > 0 && (
-              <div style={{ background: "#F9FAFB", borderRadius: 10, padding: 12, marginBottom: 14, maxHeight: 160, overflowY: "auto" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#374151" }}>{importRows.length} students to import:</p>
+              <div style={{ background: "var(--admin-input-bg)", borderRadius: 10, padding: 12, marginBottom: 14, maxHeight: 160, overflowY: "auto", border: "1px solid var(--admin-card-border)" }}>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{importRows.length} students to import:</p>
                 {importRows.slice(0, 8).map((r, i) => (
-                  <p key={i} style={{ margin: "2px 0", fontSize: 12, color: "#6B7280" }}>{r.name} · {r.batch} · {r.parentPhone}</p>
+                  <p key={i} style={{ margin: "2px 0", fontSize: 12, color: "var(--admin-text-muted)" }}>
+                    {r.name} · {r.batch} · {r.parentPhone}{r.parentEmail ? ` · ${r.parentEmail}` : ""}
+                  </p>
                 ))}
-                {importRows.length > 8 && <p style={{ fontSize: 12, color: "#9CA3AF", margin: "4px 0 0" }}>...and {importRows.length - 8} more</p>}
+                {importRows.length > 8 && <p style={{ fontSize: 12, color: "var(--admin-text-faint)", margin: "4px 0 0" }}>...and {importRows.length - 8} more</p>}
               </div>
             )}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => { setShowImport(false); setImportRows([]); }} style={{ flex: 1, padding: "10px", border: "1.5px solid #E5E7EB", borderRadius: 10, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => { setShowImport(false); setImportRows([]); }} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
               <button onClick={handleImport} disabled={importing || importRows.length === 0}
                 style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: importing || !importRows.length ? "#9CA3AF" : "#059669", color: "#fff", fontSize: 14, fontWeight: 700, cursor: importing || !importRows.length ? "not-allowed" : "pointer" }}>
                 {importing ? "Importing..." : `Import ${importRows.length} Students`}
@@ -346,15 +375,15 @@ export default function StudentsPage() {
 
       {/* Delete Modal */}
       {deleteStudent && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(2px)" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", margin: 16 }}>
+        <div style={S.overlay}>
+          <div style={{ ...S.modal, maxWidth: 420 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Delete Student</h2>
-              <button onClick={() => setDeleteStudent(null)} style={{ border: "none", background: "#F3F4F6", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "#6B7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Delete Student</h2>
+              <button onClick={() => setDeleteStudent(null)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
             </div>
-            <p style={{ color: "#374151", fontSize: 14, margin: "0 0 24px 0", lineHeight: 1.6 }}>Delete <strong>{deleteStudent.name}</strong>? This removes all their attendance records.</p>
+            <p style={{ color: "var(--admin-text-muted)", fontSize: 14, margin: "0 0 24px 0", lineHeight: 1.6 }}>Delete <strong style={{ color: "var(--admin-text)" }}>{deleteStudent.name}</strong>? This removes all their attendance records.</p>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setDeleteStudent(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid #E5E7EB", borderRadius: 10, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => setDeleteStudent(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
               <button onClick={handleDelete} disabled={deleting} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: deleting ? "#FCA5A5" : "#DC2626", color: "#fff", fontSize: 14, fontWeight: 700, cursor: deleting ? "not-allowed" : "pointer" }}>
                 {deleting ? "Deleting..." : "Delete"}
               </button>
