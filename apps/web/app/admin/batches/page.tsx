@@ -15,40 +15,49 @@ type BatchDetail = { batchName: string; totalStudents: number; totalWorkingDays:
 const PALETTE = ["#1D6BF3","#7C3AED","#0D9488","#B45309","#0891B2","#BE185D","#16A34A","#DC2626"];
 function attColor(p: number) { return p >= 75 ? "#16A34A" : p >= 50 ? "#D97706" : "#DC2626"; }
 
-function downloadPTMSheet(detail: BatchDetail) {
+function downloadAllPTM(details: BatchDetail[]) {
+  // Collect all unique tests across all batches, sorted by date
   const seen = new Set<string>();
   const allTests: { key: string; label: string }[] = [];
-  for (const s of detail.students) {
-    for (const r of s.results) {
-      const key = `${r.testDate}||${r.testName}`;
-      if (!seen.has(key)) { seen.add(key); allTests.push({ key, label: `${r.testName} (${r.testDate})` }); }
+  for (const d of details) {
+    for (const s of d.students) {
+      for (const r of s.results) {
+        const key = `${r.testDate}||${r.testName}`;
+        if (!seen.has(key)) { seen.add(key); allTests.push({ key, label: `${r.testName} (${r.testDate})` }); }
+      }
     }
   }
   allTests.sort((a, b) => a.key.localeCompare(b.key));
 
-  const headers = ["Name", "Enrollment No", "Attendance %", ...allTests.map(t => t.label), "Avg Test %"];
+  const headers = ["Batch", "Name", "Enrollment No", "Attendance %", ...allTests.map(t => t.label), "Avg Test %"];
+  const rows: (string | number)[][] = [];
 
-  const rows = detail.students.map(s => {
-    const testMap: Record<string, number | string> = {};
-    for (const r of s.results) testMap[`${r.testDate}||${r.testName}`] = r.total;
-    const avgPct = s.results.length > 0
-      ? Math.round(s.results.reduce((a, r) => a + r.percentage, 0) / s.results.length)
-      : "";
-    return [
-      s.name,
-      s.enrollmentNo,
-      `${s.attendancePct}%`,
-      ...allTests.map(t => testMap[t.key] ?? ""),
-      avgPct !== "" ? `${avgPct}%` : "—",
-    ];
-  });
+  for (const d of details) {
+    for (const s of d.students) {
+      const testMap: Record<string, number | string> = {};
+      for (const r of s.results) testMap[`${r.testDate}||${r.testName}`] = r.total;
+      const avgPct = s.results.length > 0
+        ? Math.round(s.results.reduce((a, r) => a + r.percentage, 0) / s.results.length)
+        : "";
+      rows.push([
+        d.batchName,
+        s.name,
+        s.enrollmentNo,
+        `${s.attendancePct}%`,
+        ...allTests.map(t => testMap[t.key] ?? ""),
+        avgPct !== "" ? `${avgPct}%` : "—",
+      ]);
+    }
+    // Blank separator row between batches
+    if (details.indexOf(d) < details.length - 1) rows.push([]);
+  }
 
   const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `PTM-${detail.batchName}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `PTM-All-Batches-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -124,13 +133,17 @@ export default function BatchesPage() {
     }
   }
 
-  async function handleDownloadPTM(e: React.MouseEvent, batchName: string) {
-    e.stopPropagation();
-    setDownloadingPTM(p => ({ ...p, [batchName]: true }));
-    const detail = await fetchDetail(batchName);
-    if (detail) downloadPTMSheet(detail);
-    else showToast("Failed to load batch data", false);
-    setDownloadingPTM(p => ({ ...p, [batchName]: false }));
+  async function handleDownloadAllPTM() {
+    setDownloadingPTM(p => ({ ...p, __all__: true }));
+    try {
+      const details = await Promise.all(
+        batches.map(b => fetchDetail(b.name))
+      );
+      const valid = details.filter((d): d is BatchDetail => d !== null);
+      if (valid.length > 0) downloadAllPTM(valid);
+      else showToast("No data to download", false);
+    } catch { showToast("Failed to load batch data", false); }
+    setDownloadingPTM(p => ({ ...p, __all__: false }));
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -183,11 +196,29 @@ export default function BatchesPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: "-0.5px" }}>Batches</h1>
-        <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>
-          {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: "-0.5px" }}>Batches</h1>
+          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>
+            {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students
+          </p>
+        </div>
+        <button
+          onClick={handleDownloadAllPTM}
+          disabled={!!downloadingPTM["__all__"] || batches.length === 0}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "9px 18px", border: "1px solid #1D6BF330", borderRadius: 10,
+            background: "#1D6BF310", color: "#1D6BF3", fontSize: 13, fontWeight: 700,
+            cursor: downloadingPTM["__all__"] || batches.length === 0 ? "not-allowed" : "pointer",
+            opacity: downloadingPTM["__all__"] ? 0.6 : 1, whiteSpace: "nowrap",
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          {downloadingPTM["__all__"] ? "Preparing…" : "Download PTM Report"}
+        </button>
       </div>
 
       {/* Create form */}
@@ -237,7 +268,6 @@ export default function BatchesPage() {
             const isExpanded = expanded[batch.name];
             const detail = batchDetails[batch.name];
             const isLoadingDetail = loadingDetail[batch.name];
-            const isDownloading = downloadingPTM[batch.name];
 
             return (
               <motion.div key={batch.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...sp, delay: i * 0.05 }}>
@@ -278,23 +308,6 @@ export default function BatchesPage() {
 
                       {/* Action buttons */}
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 12, flexShrink: 0 }}>
-                        {/* PTM Download */}
-                        <button
-                          onClick={e => handleDownloadPTM(e, batch.name)}
-                          disabled={isDownloading}
-                          title="Download PTM Report"
-                          style={{
-                            padding: "6px 12px", border: `1px solid ${color}40`, borderRadius: 8,
-                            background: `${color}10`, color, fontSize: 11, fontWeight: 700,
-                            cursor: isDownloading ? "not-allowed" : "pointer", opacity: isDownloading ? 0.6 : 1,
-                            display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
-                          }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                          </svg>
-                          {isDownloading ? "…" : "PTM"}
-                        </button>
                         {/* Delete */}
                         <button
                           onClick={e => handleDelete(e, batch)}
