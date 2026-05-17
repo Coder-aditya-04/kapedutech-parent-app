@@ -227,6 +227,11 @@ body {
   background: linear-gradient(135deg, #1FA8E0, #4F46E5);
 }
 
+/* ── Dark mode body background (prevents white strips on scroll) ─────────── */
+.dark body {
+  background: var(--admin-bg);
+}
+
 /* ── Sidebar glass (dark) ───────────────────────────────────────────────────*/
 .dark .admin-sidebar {
   background: rgba(15,15,17,0.85);

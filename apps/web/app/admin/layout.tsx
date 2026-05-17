@@ -89,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Logo area */}
         <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid var(--admin-sidebar-border)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-          <Image src="/kap_fav.png" alt="KAP Edutech" width={156} height={50} style={{ objectFit: "contain", width: "100%", height: "auto", maxHeight: 52, filter: darkMode ? "invert(1)" : "none" }} priority />
+          <Image src="/kap_fav.png" alt="KAP Edutech" width={156} height={50} style={{ objectFit: "contain", width: "100%", height: "auto", maxHeight: 52, filter: darkMode ? "brightness(0) invert(1)" : "none" }} priority />
           <span style={{ fontSize: 9, fontWeight: 700, color: "var(--admin-text-faint)", letterSpacing: 2, textTransform: "uppercase" }}>Admin Portal</span>
         </div>
 

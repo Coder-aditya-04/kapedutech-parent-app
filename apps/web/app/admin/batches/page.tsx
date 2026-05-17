@@ -115,7 +115,7 @@ export default function BatchesPage() {
   async function fetchDetail(batchName: string): Promise<BatchDetail | null> {
     if (batchDetails[batchName]) return batchDetails[batchName];
     try {
-      const res = await fetch(`/api/admin/batches/${encodeURIComponent(batchName)}`);
+      const res = await fetch(`/api/admin/batches/detail/${encodeURIComponent(batchName)}`);
       if (!res.ok) return null;
       const data: BatchDetail = await res.json();
       setBatchDetails(p => ({ ...p, [batchName]: data }));
@@ -133,17 +133,13 @@ export default function BatchesPage() {
     }
   }
 
-  async function handleDownloadAllPTM() {
-    setDownloadingPTM(p => ({ ...p, __all__: true }));
-    try {
-      const details = await Promise.all(
-        batches.map(b => fetchDetail(b.name))
-      );
-      const valid = details.filter((d): d is BatchDetail => d !== null);
-      if (valid.length > 0) downloadAllPTM(valid);
-      else showToast("No data to download", false);
-    } catch { showToast("Failed to load batch data", false); }
-    setDownloadingPTM(p => ({ ...p, __all__: false }));
+  async function handleDownloadPTM(e: React.MouseEvent, batchName: string) {
+    e.stopPropagation();
+    setDownloadingPTM(p => ({ ...p, [batchName]: true }));
+    const detail = await fetchDetail(batchName);
+    if (detail) downloadAllPTM([detail]);
+    else showToast("Failed to load batch data", false);
+    setDownloadingPTM(p => ({ ...p, [batchName]: false }));
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -196,29 +192,11 @@ export default function BatchesPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: "-0.5px" }}>Batches</h1>
-          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>
-            {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students
-          </p>
-        </div>
-        <button
-          onClick={handleDownloadAllPTM}
-          disabled={!!downloadingPTM["__all__"] || batches.length === 0}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "9px 18px", border: "1px solid #1D6BF330", borderRadius: 10,
-            background: "#1D6BF310", color: "#1D6BF3", fontSize: 13, fontWeight: 700,
-            cursor: downloadingPTM["__all__"] || batches.length === 0 ? "not-allowed" : "pointer",
-            opacity: downloadingPTM["__all__"] ? 0.6 : 1, whiteSpace: "nowrap",
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          {downloadingPTM["__all__"] ? "Preparing…" : "Download PTM Report"}
-        </button>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: "-0.5px" }}>Batches</h1>
+        <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>
+          {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students · PTM button downloads that batch&apos;s report
+        </p>
       </div>
 
       {/* Create form */}
@@ -308,6 +286,24 @@ export default function BatchesPage() {
 
                       {/* Action buttons */}
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 12, flexShrink: 0 }}>
+                        {/* PTM Download */}
+                        <button
+                          onClick={e => handleDownloadPTM(e, batch.name)}
+                          disabled={!!downloadingPTM[batch.name]}
+                          title="Download PTM Report for this batch"
+                          style={{
+                            padding: "6px 12px", border: `1px solid ${color}40`, borderRadius: 8,
+                            background: `${color}12`, color, fontSize: 11, fontWeight: 700,
+                            cursor: downloadingPTM[batch.name] ? "not-allowed" : "pointer",
+                            opacity: downloadingPTM[batch.name] ? 0.6 : 1,
+                            display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
+                          }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                          </svg>
+                          {downloadingPTM[batch.name] ? "…" : "PTM"}
+                        </button>
                         {/* Delete */}
                         <button
                           onClick={e => handleDelete(e, batch)}
