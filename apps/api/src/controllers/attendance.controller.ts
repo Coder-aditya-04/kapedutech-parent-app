@@ -112,9 +112,13 @@ export async function getAttendanceSummary(req: Request, res: Response): Promise
   const presentDates = [...new Set(allRecords.map(r => r.date))];
   const totalPresent = presentDates.length;
 
-  // Working days = distinct dates any student punched in
+  // Working days = distinct dates any student in the SAME BATCH punched in
+  const studentBatch = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { batch: true },
+  });
   const workingDaysRaw = await prisma.attendance.findMany({
-    where: { type: "PUNCH_IN" },
+    where: { type: "PUNCH_IN", student: { batch: studentBatch?.batch ?? "" } },
     select: { date: true },
     distinct: ["date"],
     orderBy: { date: "asc" },
