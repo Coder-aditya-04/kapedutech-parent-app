@@ -14,7 +14,7 @@ type Parent = { id: string; name: string; phone: string; students: Student[] };
 type DayStatus = "present" | "absent" | "late" | "holiday" | "future";
 type CalDay = { d: number; status: DayStatus; today?: boolean; dim?: boolean };
 
-function buildCalendar(year: number, month: number, presentDates: Set<string>, todayStr: string): CalDay[] {
+function buildCalendar(year: number, month: number, presentDates: Set<string>, workingDatesSet: Set<string>, todayStr: string): CalDay[] {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days: CalDay[] = [];
@@ -23,12 +23,12 @@ function buildCalendar(year: number, month: number, presentDates: Set<string>, t
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const isToday = dateStr === todayStr;
     const isFuture = dateStr > todayStr;
-    const isWeekend = [0, 6].includes(new Date(year, month, d).getDay());
+    const isWorkingDay = workingDatesSet.has(dateStr);
     let status: DayStatus = "holiday";
     if (isFuture) status = "future";
     else if (presentDates.has(dateStr)) status = "present";
-    else if (isWeekend) status = "future";
-    else status = "absent";
+    else if (isWorkingDay) status = "absent"; // batch had school but student was absent
+    else status = "holiday"; // no school that day (weekend/holiday)
     days.push({ d, status, today: isToday });
   }
   return days;
@@ -52,7 +52,7 @@ export default function AttendanceScreen() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
-  const [summary, setSummary] = useState<AttendanceSummary>({ totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0 });
+  const [summary, setSummary] = useState<AttendanceSummary>({ totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0, workingDates: [] });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pickedDay, setPickedDay] = useState<string | null>(null);
@@ -77,7 +77,8 @@ export default function AttendanceScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const presentDates = new Set(history.filter(r => r.type === "PUNCH_IN").map(r => r.date));
-  const days = buildCalendar(year, month, presentDates, todayStr);
+  const workingDatesSet = new Set(summary.workingDates ?? []);
+  const days = buildCalendar(year, month, presentDates, workingDatesSet, todayStr);
 
   // Month stats for current view
   const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;

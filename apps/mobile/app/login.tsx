@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "@/src/context/AuthContext";
 import auth, { type FirebaseAuthTypes } from "@react-native-firebase/auth";
-import { verifyFirebaseToken, savePushToken } from "@/src/api/auth";
+import { verifyFirebaseToken, savePushToken, requestOtpEmail, verifyOtpEmail } from "@/src/api/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, ACCENT, ACCENT_2, BgBlobs, GlassCard } from "@/src/theme";
 
@@ -41,7 +41,9 @@ export default function LoginScreen() {
   const { login } = useAuth();
   const t = useTheme();
   const [step, setStep] = useState<Step>("phone");
+  const [loginMethod, setLoginMethod] = useState<"phone" | "email">("phone");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -86,7 +88,38 @@ export default function LoginScreen() {
       .catch(() => {});
   }
 
+  async function finishLoginFromBackend(token: string, parent: { id: string; phone: string }) {
+    await AsyncStorage.setItem("auth_token", token);
+    await AsyncStorage.setItem("parent", JSON.stringify(parent));
+    login(parent.phone ?? "");
+    router.replace("/(tabs)");
+    registerForPushNotifications()
+      .then(pt => { if (pt) savePushToken(parent.id, pt); })
+      .catch(() => {});
+  }
+
   function handleSendOtp() {
+    // ── Email OTP path ────────────────────────────────────────────────────────
+    if (loginMethod === "email") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError("Enter a valid email address.");
+        return;
+      }
+      setError(""); setLoading(true);
+      requestOtpEmail(email)
+        .then(() => {
+          setOtpDigits(Array(OTP_LENGTH).fill(""));
+          setStep("otp");
+          startOtpTimer();
+        })
+        .catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : "Failed to send OTP.");
+        })
+        .finally(() => setLoading(false));
+      return;
+    }
+
+    // ── Firebase phone path ───────────────────────────────────────────────────
     if (!/^\d{10}$/.test(phone)) { setError("Enter a valid 10-digit mobile number."); return; }
     setError(""); setLoading(true);
     verificationIdRef.current = null;
@@ -150,8 +183,22 @@ export default function LoginScreen() {
   async function handleVerifyOtp() {
     const otp = otpDigits.join("");
     if (otp.length !== OTP_LENGTH) { setError("Enter the 6-digit OTP."); return; }
-    if (!verificationIdRef.current) { setError("Session expired. Please resend OTP."); return; }
     setError(""); setLoading(true);
+
+    // ── Email OTP path ────────────────────────────────────────────────────────
+    if (loginMethod === "email") {
+      try {
+        const { token, parent } = await verifyOtpEmail(email, otp);
+        await finishLoginFromBackend(token, parent);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── Firebase phone path ───────────────────────────────────────────────────
+    if (!verificationIdRef.current) { setError("Session expired. Please resend OTP."); setLoading(false); return; }
     try {
       const credential = auth.PhoneAuthProvider.credential(verificationIdRef.current, otp);
       const result = await auth().signInWithCredential(credential);
@@ -228,33 +275,69 @@ export default function LoginScreen() {
                 Parent Login
               </Text>
               <Text style={{ fontSize: 26, fontWeight: "800", color: t.text, letterSpacing: -0.5, textAlign: "center", lineHeight: 32, marginBottom: 10 }}>
-                Enter your registered{"\n"}mobile number
+                {loginMethod === "phone" ? "Enter your registered\nmobile number" : "Enter your registered\nemail address"}
               </Text>
-              <Text style={{ fontSize: 13, color: t.text2, textAlign: "center", lineHeight: 20, marginBottom: 28, maxWidth: 300 }}>
-                We'll send a 6-digit OTP to verify it's you. Use the number you shared at admission.
+              <Text style={{ fontSize: 13, color: t.text2, textAlign: "center", lineHeight: 20, marginBottom: 20, maxWidth: 300 }}>
+                {loginMethod === "phone"
+                  ? "We'll send a 6-digit OTP to verify it's you. Use the number you shared at admission."
+                  : "We'll send a 6-digit OTP to your registered email address."}
               </Text>
             </View>
 
-            {/* Phone input — glass card */}
+            {/* Method toggle */}
+            <View style={{ flexDirection: "row", backgroundColor: t.neutralSoft, borderRadius: 14, padding: 4, gap: 4, marginHorizontal: 24, marginBottom: 16, zIndex: 2 }}>
+              {(["phone", "email"] as const).map(m => (
+                <TouchableOpacity
+                  key={m}
+                  onPress={() => { setLoginMethod(m); setError(""); }}
+                  style={{ flex: 1, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: loginMethod === m ? t.card : "transparent", flexDirection: "row", gap: 6 }}
+                >
+                  <Ionicons name={m === "phone" ? "phone-portrait-outline" : "mail-outline"} size={14} color={loginMethod === m ? t.text : t.text3} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: loginMethod === m ? t.text : t.text3 }}>{m === "phone" ? "Mobile" : "Email"}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Input — glass card */}
             <View style={{ paddingHorizontal: 24, zIndex: 2 }}>
-              <GlassCard intensity={55} style={{ flexDirection: "row", alignItems: "center", borderRadius: 16 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 16, paddingRight: 14, borderRightWidth: 1, borderRightColor: t.divider, paddingVertical: 16 }}>
-                  <Text style={{ fontSize: 18 }}>🇮🇳</Text>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: t.text }}>+91</Text>
-                  <Ionicons name="chevron-down" size={12} color={t.text3} />
-                </View>
-                <RNTextInput
-                  style={{ flex: 1, fontSize: 18, fontWeight: "700", color: t.text, paddingHorizontal: 16, paddingVertical: 16, letterSpacing: 0.5 }}
-                  placeholder="00000 00000"
-                  placeholderTextColor={t.text3}
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  value={phone}
-                  onChangeText={(v) => { setPhone(v.replace(/\D/g, "")); setError(""); }}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSendOtp}
-                />
-              </GlassCard>
+              {loginMethod === "phone" ? (
+                <GlassCard intensity={55} style={{ flexDirection: "row", alignItems: "center", borderRadius: 16 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 16, paddingRight: 14, borderRightWidth: 1, borderRightColor: t.divider, paddingVertical: 16 }}>
+                    <Text style={{ fontSize: 18 }}>🇮🇳</Text>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: t.text }}>+91</Text>
+                    <Ionicons name="chevron-down" size={12} color={t.text3} />
+                  </View>
+                  <RNTextInput
+                    style={{ flex: 1, fontSize: 18, fontWeight: "700", color: t.text, paddingHorizontal: 16, paddingVertical: 16, letterSpacing: 0.5 }}
+                    placeholder="00000 00000"
+                    placeholderTextColor={t.text3}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={phone}
+                    onChangeText={(v) => { setPhone(v.replace(/\D/g, "")); setError(""); }}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSendOtp}
+                  />
+                </GlassCard>
+              ) : (
+                <GlassCard intensity={55} style={{ flexDirection: "row", alignItems: "center", borderRadius: 16 }}>
+                  <View style={{ paddingLeft: 16, paddingRight: 14, borderRightWidth: 1, borderRightColor: t.divider, paddingVertical: 18 }}>
+                    <Ionicons name="mail-outline" size={20} color={ACCENT} />
+                  </View>
+                  <RNTextInput
+                    style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.text, paddingHorizontal: 16, paddingVertical: 16 }}
+                    placeholder="parent@email.com"
+                    placeholderTextColor={t.text3}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={(v) => { setEmail(v.trim()); setError(""); }}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSendOtp}
+                  />
+                </GlassCard>
+              )}
 
               {/* Security note */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 12 }}>
@@ -282,7 +365,7 @@ export default function LoginScreen() {
                   style={[{ height: 54, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, shadowColor: ACCENT, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }, loading && { opacity: 0.6 }]}
                 >
                   <Text style={{ color: "white", fontSize: 16, fontWeight: "700", letterSpacing: 0.1 }}>
-                    {loading ? "Sending OTP..." : "Send OTP"}
+                    {loading ? "Sending OTP..." : loginMethod === "email" ? "Send OTP to Email" : "Send OTP"}
                   </Text>
                   {!loading && <Ionicons name="arrow-forward" size={18} color="white" />}
                 </LinearGradient>
@@ -329,7 +412,10 @@ export default function LoginScreen() {
               Enter the 6-digit code
             </Text>
             <Text style={{ fontSize: 13, color: t.text2, textAlign: "center", lineHeight: 20, marginBottom: 8 }}>
-              Sent to <Text style={{ color: t.text, fontWeight: "700" }}>+91 {phone}</Text>
+              Sent to{" "}
+              <Text style={{ color: t.text, fontWeight: "700" }}>
+                {loginMethod === "email" ? email : `+91 ${phone}`}
+              </Text>
               {" "}·{" "}
               <Text
                 style={{ color: ACCENT, fontWeight: "700" }}

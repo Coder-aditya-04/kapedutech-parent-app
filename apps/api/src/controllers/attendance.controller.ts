@@ -95,7 +95,7 @@ export async function getStudentAttendance(req: Request, res: Response): Promise
   const records = await prisma.attendance.findMany({
     where: { studentId },
     orderBy: { markedAt: "desc" },
-    take: 30,
+    take: 60,
   });
   res.json(records);
 }
@@ -119,22 +119,31 @@ export async function getAttendanceSummary(req: Request, res: Response): Promise
     distinct: ["date"],
     orderBy: { date: "asc" },
   });
-  const totalWorkingDays = workingDaysRaw.length;
+  const workingDates = workingDaysRaw.map(r => r.date);
+  const totalWorkingDays = workingDates.length;
+  const workingDatesSet = new Set(workingDates);
 
-  // Current streak — consecutive days present going backwards from today
+  // Current streak — consecutive present days, skipping non-working days (weekends/holidays)
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   const presentSet = new Set(presentDates);
   let streak = 0;
   const cursor = new Date(todayStr + "T00:00:00+05:30");
-  while (true) {
-    const d = cursor.toISOString().slice(0, 10);
-    if (presentSet.has(d)) { streak++; cursor.setDate(cursor.getDate() - 1); }
-    else { break; }
+  for (let i = 0; i < 365; i++) {
+    const d = cursor.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    if (presentSet.has(d)) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else if (!workingDatesSet.has(d)) {
+      // Not a working day — skip it (weekend/holiday doesn't break streak)
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break; // Working day but absent — streak ends
+    }
   }
 
   const allTimePct = totalWorkingDays > 0 ? Math.round((totalPresent / totalWorkingDays) * 100) : 0;
 
-  res.json({ totalPresent, totalWorkingDays, currentStreak: streak, allTimePct });
+  res.json({ totalPresent, totalWorkingDays, currentStreak: streak, allTimePct, workingDates });
 }
 
 export async function getStudentTodayAttendance(req: Request, res: Response): Promise<void> {

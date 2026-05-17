@@ -38,7 +38,7 @@ function formatTime(iso: string | null) {
 export default function AttendanceCalendarScreen() {
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [today, setToday] = useState<TodayAttendance>({ punchIn: null, punchOut: null });
-  const [summary, setSummary] = useState<AttendanceSummary>({ totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0 });
+  const [summary, setSummary] = useState<AttendanceSummary>({ totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0, workingDates: [] });
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const now = new Date();

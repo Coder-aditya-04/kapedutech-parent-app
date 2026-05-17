@@ -31,6 +31,7 @@ export type AttendanceSummary = {
   totalWorkingDays: number;
   currentStreak: number;
   allTimePct: number;
+  workingDates: string[];
 };
 
 export async function getAttendanceSummary(studentId: string, token: string): Promise<AttendanceSummary> {
@@ -38,9 +39,9 @@ export async function getAttendanceSummary(studentId: string, token: string): Pr
     const res = await fetch(`${ATTENDANCE_URL}/student/${studentId}/summary`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return { totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0 };
+    if (!res.ok) return { totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0, workingDates: [] };
     return res.json();
-  } catch { return { totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0 }; }
+  } catch { return { totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0, workingDates: [] }; }
 }
 
 export async function getTodayAttendance(studentId: string, token: string): Promise<TodayAttendance> {
@@ -139,6 +140,7 @@ export type TestResult = {
   totalInBatch: number | null;
   scores: Record<string, number>;
   subjectMaxes: Record<string, number> | null;
+  classAvgScores: Record<string, number> | null;
   total: number;
   percentage: number;
   percentile: number | null;
