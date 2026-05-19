@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -231,7 +232,8 @@ function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void })
   );
 }
 
-export default function ResultsPage() {
+function ResultsPageInner() {
+  const searchParams = useSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
   const [tests, setTests] = useState<TestMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -260,6 +262,14 @@ export default function ResultsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const qTest = searchParams.get("test");
+    const qDate = searchParams.get("date");
+    if (!qTest || !qDate || tests.length === 0) return;
+    const found = tests.find(t => t.testName === qTest && t.testDate === qDate);
+    if (found) setSelectedTest(found);
+  }, [searchParams, tests]);
 
   function showToast(msg: string, ok: boolean) { setToast({ msg, ok }); setTimeout(() => setToast(null), 4000); }
 
@@ -502,5 +512,13 @@ export default function ResultsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense>
+      <ResultsPageInner />
+    </Suspense>
   );
 }

@@ -412,7 +412,7 @@ export default function DashboardPage() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {tests.slice(0, 5).map((t, i) => (
-                  <div key={i} onClick={() => router.push("/admin/results")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "var(--admin-input-bg)", borderRadius: 10, border: "1px solid var(--admin-card-border)", cursor: "pointer", transition: "border-color 0.15s" }}
+                  <div key={i} onClick={() => router.push(`/admin/results?test=${encodeURIComponent(t.testName)}&date=${t.testDate}`)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "var(--admin-input-bg)", borderRadius: 10, border: "1px solid var(--admin-card-border)", cursor: "pointer", transition: "border-color 0.15s" }}
                     onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--admin-accent)")}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--admin-card-border)")}
                   >
