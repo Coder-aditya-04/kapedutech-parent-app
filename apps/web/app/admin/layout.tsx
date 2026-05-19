@@ -38,6 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [sideStats, setSideStats] = useState<{ present: number; total: number } | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("admin_dark_mode") === "true";
@@ -52,6 +53,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [router, pathname]);
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    if (pathname === "/admin") return;
+    async function fetchSideStats() {
+      try {
+        const [aRes, sRes] = await Promise.all([
+          fetch("/api/admin/attendance/today"),
+          fetch("/api/admin/students"),
+        ]);
+        const att: { type: string; studentId: string }[] = aRes.ok ? await aRes.json() : [];
+        const stu: unknown[] = sRes.ok ? await sRes.json() : [];
+        const present = new Set(att.filter(r => r.type === "PUNCH_IN").map(r => r.studentId)).size;
+        setSideStats({ present, total: stu.length });
+      } catch {}
+    }
+    fetchSideStats();
+    const id = setInterval(fetchSideStats, 30000);
+    return () => clearInterval(id);
+  }, [pathname]);
 
   function toggleDark() {
     const next = !darkMode;
@@ -133,6 +153,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
+
+        {/* Mini attendance stats */}
+        {sideStats && (
+          <div style={{ margin: "0 10px 8px", borderRadius: 12, background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", overflow: "hidden" }}>
+            <div style={{ padding: "10px 12px 8px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--admin-text-faint)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 7 }}>Today&apos;s Attendance</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 7 }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: "var(--admin-accent)", letterSpacing: "-1px", lineHeight: 1 }}>{sideStats.present}</span>
+                <span style={{ fontSize: 11, color: "var(--admin-text-faint)" }}>/ {sideStats.total}</span>
+                <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: sideStats.total > 0 && sideStats.present / sideStats.total >= 0.75 ? "#16A34A" : sideStats.present / sideStats.total >= 0.5 ? "#D97706" : "#DC2626" }}>
+                  {sideStats.total > 0 ? Math.round(sideStats.present / sideStats.total * 100) : 0}%
+                </span>
+              </div>
+              <div style={{ height: 4, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${sideStats.total > 0 ? Math.round(sideStats.present / sideStats.total * 100) : 0}%`,
+                  background: sideStats.total > 0 && sideStats.present / sideStats.total >= 0.75 ? "#16A34A" : sideStats.total > 0 && sideStats.present / sideStats.total >= 0.5 ? "#D97706" : "#DC2626",
+                  borderRadius: 100, transition: "width 1s ease",
+                }} />
+              </div>
+            </div>
+            <div style={{ padding: "6px 12px 8px", display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>Present</span>
+              <span style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>{sideStats.total - sideStats.present} absent</span>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div style={{ padding: "10px 10px 14px", borderTop: "1px solid var(--admin-sidebar-border)" }}>
