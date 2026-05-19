@@ -114,7 +114,7 @@ export default function StudentsPage() {
 
   function showToast(msg: string, ok: boolean) { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500); }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     try {
@@ -137,7 +137,7 @@ export default function StudentsPage() {
     setEditForm({ name: s.name, enrollmentNo: s.enrollmentNo, batch: s.batch || batches[0]?.name || "", parentName: s.parent?.name ?? "", parentPhone: s.parent?.phone ?? "", parentEmail: s.parent?.email ?? "" });
   }
 
-  async function handleEditSubmit(e: React.FormEvent) {
+  async function handleEditSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!editStudent) return;
     setEditing(true);

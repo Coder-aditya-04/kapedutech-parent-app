@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 type Batch = { id: string; name: string; createdAt: string };
 type Analytics = Batch & { totalStudents: number; avgAttendancePct: number; totalWorkingDays?: number };
@@ -85,6 +86,139 @@ function SpotlightCard({ children, accent }: { children: React.ReactNode; accent
 
 const sp = { type: "spring" as const, stiffness: 110, damping: 22 };
 
+function StudentModal({ student, color, onClose }: { student: StudentDetail; color: string; onClose: () => void }) {
+  const sorted = [...student.results].sort((a, b) => a.testDate.localeCompare(b.testDate));
+  const chartData = sorted.map(r => ({
+    name: r.testName.length > 12 ? r.testName.slice(0, 12) + "…" : r.testName,
+    fullName: r.testName,
+    total: r.total,
+    pct: r.percentage,
+    rank: r.rank,
+    of: r.totalInBatch,
+    date: r.testDate,
+  }));
+  const avgPct = sorted.length > 0
+    ? Math.round(sorted.reduce((s, r) => s + r.percentage, 0) / sorted.length)
+    : null;
+  const bestRank = sorted.length > 0 ? Math.min(...sorted.map(r => r.rank)) : null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
+    >
+      <motion.div
+        onClick={e => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.94, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 16 }}
+        transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        style={{
+          background: "var(--admin-card-bg)", borderRadius: 20,
+          border: "1px solid var(--admin-card-border)",
+          width: "100%", maxWidth: 680, maxHeight: "88vh", overflow: "auto",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--admin-card-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${color}20`, color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800 }}>
+              {student.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--admin-text)" }}>{student.name}</div>
+              <div style={{ fontSize: 12, color: "var(--admin-text-faint)", fontFamily: "monospace" }}>{student.enrollmentNo}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "1px solid var(--admin-card-border)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Stat pills */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[
+              { label: "Attendance", value: `${student.attendancePct}%`, color: attColor(student.attendancePct) },
+              { label: "Days Present", value: `${student.presentDays} / ${student.totalWorkingDays}`, color: "#4F46E5" },
+              { label: "Tests Taken", value: String(sorted.length), color: color },
+              ...(avgPct !== null ? [{ label: "Avg Score %", value: `${avgPct}%`, color: "#0891B2" }] : []),
+              ...(bestRank !== null ? [{ label: "Best Rank", value: `#${bestRank}`, color: "#D97706" }] : []),
+            ].map(s => (
+              <div key={s.label} style={{ background: `${s.color}12`, border: `1px solid ${s.color}30`, borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 2, minWidth: 90 }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</span>
+                <span style={{ fontSize: 10, color: "var(--admin-text-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Test scores bar chart */}
+          {chartData.length > 0 ? (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>Test Score History</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--admin-card-border)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#999" }} axisLine={false} tickLine={false} interval={0} />
+                  <YAxis tick={{ fontSize: 9, fill: "#999" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: `${color}10` }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+                      return (
+                        <div style={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+                          <div style={{ fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>{d.fullName}</div>
+                          <div style={{ color: "var(--admin-text-muted)" }}>{d.date}</div>
+                          <div style={{ color, fontWeight: 700, marginTop: 4 }}>Score: {d.total}</div>
+                          <div style={{ color: "#0891B2", fontWeight: 600 }}>{d.pct}% · Rank {d.rank}/{d.of}</div>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="total" fill={color} radius={[5, 5, 0, 0]} maxBarSize={48} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div style={{ padding: "28px 0", textAlign: "center", color: "var(--admin-text-faint)", fontSize: 13 }}>No test results yet</div>
+          )}
+
+          {/* Test results table */}
+          {sorted.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>All Tests</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {sorted.map((r, idx) => (
+                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px", background: "var(--admin-input-bg)", borderRadius: 10, border: "1px solid var(--admin-card-border)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.testName}</div>
+                      <div style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>{r.testDate}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color }}>{r.total}</div>
+                      <div style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>{r.percentage}%</div>
+                    </div>
+                    <div style={{ textAlign: "right", minWidth: 56 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: r.rank === 1 ? "#D97706" : "var(--admin-text-muted)" }}>#{r.rank}</div>
+                      <div style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>of {r.totalInBatch}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Analytics[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +229,7 @@ export default function BatchesPage() {
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetail>>({});
   const [loadingDetail, setLoadingDetail] = useState<Record<string, boolean>>({});
   const [downloadingPTM, setDownloadingPTM] = useState<Record<string, boolean>>({});
+  const [selectedStudent, setSelectedStudent] = useState<{ student: StudentDetail; color: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,7 +277,7 @@ export default function BatchesPage() {
     setDownloadingPTM(p => ({ ...p, [batchName]: false }));
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!newName.trim()) return;
     setCreating(true);
@@ -364,11 +499,15 @@ export default function BatchesPage() {
                                 {detail.students.map((s, si) => {
                                   const latestTest = s.results[0];
                                   return (
-                                    <div key={s.id} style={{
+                                    <div key={s.id} onClick={() => setSelectedStudent({ student: s, color })} style={{
                                       display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
                                       borderRadius: 12, background: "var(--admin-input-bg)",
                                       border: "1px solid var(--admin-card-border)",
-                                    }}>
+                                      cursor: "pointer", transition: "border-color 0.15s",
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.borderColor = color + "60")}
+                                    onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--admin-card-border)")}
+                                    >
                                       {/* Index */}
                                       <div style={{
                                         width: 28, height: 28, borderRadius: 8, background: `${color}18`,
@@ -412,6 +551,17 @@ export default function BatchesPage() {
           })}
         </div>
       )}
+
+      {/* Student detail modal */}
+      <AnimatePresence>
+        {selectedStudent && (
+          <StudentModal
+            student={selectedStudent.student}
+            color={selectedStudent.color}
+            onClose={() => setSelectedStudent(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

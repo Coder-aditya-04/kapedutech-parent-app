@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
     }
   }, [router]);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
