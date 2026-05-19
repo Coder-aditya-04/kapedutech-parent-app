@@ -8,20 +8,20 @@
   --foreground: #171717;
   --sidebar-width: 248px;
 
-  /* Light — zinc-based neutral */
-  --admin-bg:               #F4F4F5;
-  --admin-sidebar-bg:       #FFFFFF;
-  --admin-sidebar-border:   rgba(0,0,0,0.07);
-  --admin-topbar-bg:        #FFFFFF;
-  --admin-topbar-border:    rgba(0,0,0,0.07);
+  /* Light — clean with subtle warmth */
+  --admin-bg:               #ECEEF3;
+  --admin-sidebar-bg:       rgba(255,255,255,0.82);
+  --admin-sidebar-border:   rgba(0,0,0,0.06);
+  --admin-topbar-bg:        rgba(255,255,255,0.80);
+  --admin-topbar-border:    rgba(0,0,0,0.06);
   --admin-text:             #09090B;
-  --admin-text-muted:       #71717A;
+  --admin-text-muted:       #52525B;
   --admin-text-faint:       #A1A1AA;
-  --admin-card-bg:          #FFFFFF;
+  --admin-card-bg:          rgba(255,255,255,0.88);
   --admin-card-border:      rgba(0,0,0,0.06);
   --admin-input-border:     #D4D4D8;
-  --admin-input-bg:         #FAFAFA;
-  --admin-page-bg:          #F4F4F5;
+  --admin-input-bg:         rgba(248,248,250,0.90);
+  --admin-page-bg:          #ECEEF3;
   --admin-accent:           #1D6BF3;
   --admin-glass-bg:         rgba(255,255,255,0.72);
   --admin-glass-border:     rgba(255,255,255,0.90);
@@ -30,24 +30,24 @@
 }
 
 .dark {
-  /* Dark — zinc-950 / zinc-900 palette, no blue tint */
-  --admin-bg:               #09090B;
-  --admin-sidebar-bg:       #0F0F11;
+  /* Dark — deep zinc with glass surfaces */
+  --admin-bg:               #070709;
+  --admin-sidebar-bg:       rgba(10,10,14,0.88);
   --admin-sidebar-border:   rgba(255,255,255,0.06);
-  --admin-topbar-bg:        #0F0F11;
+  --admin-topbar-bg:        rgba(10,10,14,0.88);
   --admin-topbar-border:    rgba(255,255,255,0.06);
   --admin-text:             #FAFAFA;
   --admin-text-muted:       #A1A1AA;
   --admin-text-faint:       #71717A;
-  --admin-card-bg:          #18181B;
+  --admin-card-bg:          rgba(20,20,26,0.82);
   --admin-card-border:      rgba(255,255,255,0.07);
   --admin-input-border:     #3F3F46;
-  --admin-input-bg:         #27272A;
-  --admin-page-bg:          #09090B;
+  --admin-input-bg:         rgba(30,30,38,0.85);
+  --admin-page-bg:          #070709;
   --admin-accent:           #3B82F6;
-  --admin-glass-bg:         rgba(22,28,46,0.82);
-  --admin-glass-border:     rgba(255,255,255,0.08);
-  --admin-glass-shadow:     0 4px 24px rgba(0,0,0,0.30);
+  --admin-glass-bg:         rgba(14,14,20,0.80);
+  --admin-glass-border:     rgba(255,255,255,0.07);
+  --admin-glass-shadow:     0 4px 32px rgba(0,0,0,0.40);
   --admin-accent-2:         #1FA8E0;
 }
 
@@ -60,14 +60,35 @@
 
 html { scroll-behavior: smooth; }
 
+/* ── Body — glassmorphism base ───────────────────────────────────────────── */
 body {
-  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background: var(--admin-bg);
+  background-attachment: fixed;
 }
 
-/* ── Scrollbar (dark mode) ───────────────────────────────────────────────────*/
+/* Light mode: subtle cool-gray gradient */
+body {
+  background:
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(29,107,243,0.05), transparent),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(124,58,237,0.04), transparent),
+    #ECEEF3;
+  background-attachment: fixed;
+}
+
+/* Dark mode: deep space glass gradient */
+.dark body {
+  background:
+    radial-gradient(ellipse 75% 65% at -5% -5%, rgba(29,107,243,0.10), transparent),
+    radial-gradient(ellipse 65% 55% at 108% 108%, rgba(124,58,237,0.08), transparent),
+    radial-gradient(ellipse 50% 40% at 50% 110%, rgba(15,168,224,0.04), transparent),
+    #070709;
+  background-attachment: fixed;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────────*/
 .dark ::-webkit-scrollbar { width: 5px; height: 5px; }
 .dark ::-webkit-scrollbar-track { background: transparent; }
 .dark ::-webkit-scrollbar-thumb { background: #3F3F46; border-radius: 999px; }
@@ -104,6 +125,8 @@ body {
 .admin-sidebar {
   width: var(--sidebar-width);
   background: var(--admin-sidebar-bg);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -111,7 +134,7 @@ body {
   z-index: 40;
   border-right: 1px solid var(--admin-sidebar-border);
   box-shadow: 1px 0 0 var(--admin-sidebar-border),
-              4px 0 32px rgba(31,168,224,0.06);
+              4px 0 40px rgba(0,0,0,0.08);
   transition: transform 0.25s cubic-bezier(0.16,1,0.3,1);
 }
 
@@ -119,7 +142,7 @@ body {
   flex: 1;
   margin-left: var(--sidebar-width);
   min-height: 100vh;
-  background: var(--admin-bg);
+  background: transparent;
 }
 
 .admin-topbar { display: none; }
@@ -128,8 +151,9 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.45);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 39;
 }
 
@@ -167,51 +191,13 @@ body {
   gap: 12px;
 }
 
-/* ── Tablet ─────────────────────────────────────────────────────────────────*/
-@media (max-width: 1024px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* ── Mobile ─────────────────────────────────────────────────────────────────*/
-@media (max-width: 768px) {
-  .admin-sidebar {
-    transform: translateX(-100%);
-    box-shadow: 4px 0 24px rgba(0,0,0,0.18);
-  }
-  .admin-sidebar.open { transform: translateX(0); }
-  .admin-main  { margin-left: 0; }
-  .admin-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: var(--admin-topbar-bg);
-    border-bottom: 1px solid var(--admin-topbar-border);
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
-  }
-  .sidebar-overlay.open { display: block; }
-  .admin-page { padding: 20px 16px; }
-  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .page-header { flex-direction: column; align-items: flex-start; }
-  .page-header-actions { width: 100%; display: flex; gap: 8px; flex-wrap: wrap; }
-}
-
-/* ── Small phones ───────────────────────────────────────────────────────────*/
-@media (max-width: 480px) {
-  .stat-grid  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .card-grid  { grid-template-columns: 1fr; }
-}
-
 /* ── Glass card ─────────────────────────────────────────────────────────────*/
 .glass-card {
   background: var(--admin-glass-bg);
   border: 1px solid var(--admin-glass-border);
   box-shadow: var(--admin-glass-shadow);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
 }
 
 /* ── Accent gradient text ───────────────────────────────────────────────────*/
@@ -227,14 +213,42 @@ body {
   background: linear-gradient(135deg, #1FA8E0, #4F46E5);
 }
 
-/* ── Dark mode body background (prevents white strips on scroll) ─────────── */
-.dark body {
-  background: var(--admin-bg);
+/* ── Tablet ─────────────────────────────────────────────────────────────────*/
+@media (max-width: 1024px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ── Sidebar glass (dark) ───────────────────────────────────────────────────*/
-.dark .admin-sidebar {
-  background: rgba(15,15,17,0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+/* ── Mobile ─────────────────────────────────────────────────────────────────*/
+@media (max-width: 768px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    box-shadow: 4px 0 32px rgba(0,0,0,0.22);
+  }
+  .admin-sidebar.open { transform: translateX(0); }
+  .admin-main  { margin-left: 0; }
+  .admin-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--admin-topbar-bg);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border-bottom: 1px solid var(--admin-topbar-border);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    box-shadow: 0 1px 12px rgba(0,0,0,0.08);
+  }
+  .sidebar-overlay.open { display: block; }
+  .admin-page { padding: 20px 16px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .page-header { flex-direction: column; align-items: flex-start; }
+  .page-header-actions { width: 100%; display: flex; gap: 8px; flex-wrap: wrap; }
+}
+
+/* ── Small phones ───────────────────────────────────────────────────────────*/
+@media (max-width: 480px) {
+  .stat-grid  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .card-grid  { grid-template-columns: 1fr; }
 }
