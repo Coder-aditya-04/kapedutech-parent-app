@@ -66,6 +66,7 @@ export default function DashboardPage() {
   const [batch, setBatch] = useState("All");
   const [center, setCenter] = useState("All");
   const [batchCenter, setBatchCenter] = useState("All");
+  const [attSearch, setAttSearch] = useState("");
   const [batchChartBatches, setBatchChartBatches] = useState<BatchAnalytics[]>([]);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
@@ -158,7 +159,7 @@ export default function DashboardPage() {
   const atRiskBatches = batches.filter(b => b.totalStudents > 0 && b.avgAttendancePct < 75).sort((a, b) => a.avgAttendancePct - b.avgAttendancePct);
   const batchChartData = (batchChartBatches.length > 0 ? batchChartBatches : batches)
     .filter(b => b.totalStudents > 0)
-    .map(b => ({ name: b.name.length > 12 ? b.name.slice(0, 11) + "…" : b.name, fullName: b.name, pct: b.avgAttendancePct, fill: attColor(b.avgAttendancePct) }))
+    .map(b => ({ name: b.name, fullName: b.name, pct: b.avgAttendancePct, fill: attColor(b.avgAttendancePct) }))
     .sort((a, b) => b.pct - a.pct);
   const dateStr = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const refreshStr = lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -562,15 +563,28 @@ export default function DashboardPage() {
         <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--admin-card-border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Live Attendance</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, color: "#059669", background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.18)", borderRadius: 100, padding: "3px 10px", fontWeight: 600 }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#059669", display: "inline-block" }} />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, color: "#08BD80", background: "rgba(8,189,128,0.08)", border: "1px solid rgba(8,189,128,0.18)", borderRadius: 100, padding: "3px 10px", fontWeight: 600 }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#08BD80", display: "inline-block" }} />
               Auto-refresh · {refreshStr}
             </span>
           </div>
-          <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none" }}>
-            {batchNames.map(b => (
-              <button key={b} onClick={() => setBatch(b)} style={{ padding: "4px 12px", borderRadius: 100, border: "1px solid", borderColor: batch === b ? "var(--admin-accent)" : "var(--admin-card-border)", background: batch === b ? "var(--admin-accent)" : "transparent", color: batch === b ? "#fff" : "var(--admin-text-muted)", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>{b}</button>
-            ))}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {/* Search */}
+            <div style={{ position: "relative" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input
+                value={attSearch}
+                onChange={e => setAttSearch(e.target.value)}
+                placeholder="Search student…"
+                style={{ padding: "5px 10px 5px 28px", borderRadius: 8, border: "1px solid var(--admin-card-border)", background: "var(--admin-input-bg)", color: "var(--admin-text)", fontSize: 12, outline: "none", width: 160 }}
+              />
+            </div>
+            {/* Batch chips */}
+            <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none" }}>
+              {batchNames.map(b => (
+                <button key={b} onClick={() => setBatch(b)} style={{ padding: "4px 12px", borderRadius: 100, border: "1px solid", borderColor: batch === b ? "var(--admin-accent)" : "var(--admin-card-border)", background: batch === b ? "var(--admin-accent)" : "transparent", color: batch === b ? "#fff" : "var(--admin-text-muted)", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>{b}</button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="table-wrap">
@@ -590,7 +604,11 @@ export default function DashboardPage() {
                   <div style={{ color: "var(--admin-text-faint)", fontSize: 14, fontWeight: 500 }}>No attendance records for today</div>
                   <div style={{ color: "var(--admin-text-faint)", fontSize: 12, marginTop: 4, opacity: 0.6 }}>Records appear as students scan their QR codes</div>
                 </td></tr>
-              ) : summaries.map(s => {
+              ) : summaries.filter(s => {
+                  if (!attSearch.trim()) return true;
+                  const q = attSearch.toLowerCase();
+                  return s.student.name.toLowerCase().includes(q) || s.student.enrollmentNo.toLowerCase().includes(q);
+                }).map(s => {
                 const status = s.punchIn && s.punchOut ? "Complete" : s.punchIn ? "In Progress" : "Absent";
                 const sc = {
                   Complete: { color: "#08BD80", bg: "rgba(8,189,128,0.08)", label: "✓ Complete" },

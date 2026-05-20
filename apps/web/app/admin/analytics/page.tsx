@@ -53,6 +53,8 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState<7 | 14>(7);
   const [selectedTest, setSelectedTest] = useState("");
   const [selectedBatch, setSelectedBatch] = useState("All");
+  const [rankCenter, setRankCenter] = useState("All");
+  const [rankBatches, setRankBatches] = useState<BatchAnalytics[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +78,15 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Batch ranking filtered by center
+  useEffect(() => {
+    const cp = rankCenter !== "All" ? `?center=${encodeURIComponent(rankCenter)}` : "";
+    fetch(`/api/admin/batches/analytics${cp}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((b: BatchAnalytics[]) => setRankBatches(b))
+      .catch(() => {});
+  }, [rankCenter]);
 
   // Fetch center-split sparkline data
   useEffect(() => {
@@ -137,6 +148,10 @@ export default function AnalyticsPage() {
 
   const allBatches = ["All", ...Array.from(new Set(testResults.map(r => r.student?.batch).filter(Boolean)))];
 
+  const sortedRankBatches = [...(rankBatches.length > 0 ? rankBatches : batches)]
+    .filter(b => b.totalStudents > 0)
+    .sort((a, b) => b.avgAttendancePct - a.avgAttendancePct);
+
   const subjectAvgs = filteredResults.length > 0
     ? (() => {
         const COLORS = ["#6366F1", "#08BD80", "#F59E0B", "#0891B2", "#8B5CF6", "#EC4899"];
@@ -149,7 +164,6 @@ export default function AnalyticsPage() {
       })()
     : [];
 
-  const sortedBatches = [...batches].filter(b => b.totalStudents > 0).sort((a, b) => b.avgAttendancePct - a.avgAttendancePct);
   const sparkMax = sparkData.length > 0 ? Math.max(...sparkData.map(d => Math.max(d.cr, d.nr, d.total)), 1) : 10;
   const dateStr = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
@@ -386,15 +400,27 @@ export default function AnalyticsPage() {
 
         {/* Batch ranking */}
         <div style={{ ...card, padding: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Batch Ranking</div>
-          <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 20 }}>Sorted by average attendance · last 30 days</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Batch Ranking</div>
+              <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 3 }}>Sorted by average attendance · last 30 days</div>
+            </div>
+            <select
+              value={rankCenter}
+              onChange={e => setRankCenter(e.target.value)}
+              style={{ padding: "5px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", color: "var(--admin-text)", cursor: "pointer", outline: "none" }}
+            >
+              {["All", "College Road", "Nashik Road"].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom: 16 }} />
           {loading ? (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--admin-text-faint)", fontSize: 13 }}>Loading…</div>
-          ) : sortedBatches.length === 0 ? (
+          ) : sortedRankBatches.length === 0 ? (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--admin-text-faint)", fontSize: 13 }}>No batch data yet</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {sortedBatches.map((b, i) => (
+              {sortedRankBatches.map((b, i) => (
                 <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => router.push(`/admin/batches/${encodeURIComponent(b.name)}`)}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-faint)", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
