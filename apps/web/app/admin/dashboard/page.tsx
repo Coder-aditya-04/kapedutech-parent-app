@@ -60,9 +60,13 @@ export default function DashboardPage() {
   const [tests, setTests] = useState<TestMeta[]>([]);
   const [sparkData, setSparkData] = useState<{ date: string; label: string; present: number }[]>([]);
   const [subjectAvgs, setSubjectAvgs] = useState<SubjectAvg[]>([]);
+  const [subjectRaw, setSubjectRaw] = useState<{ scores: Record<string, number>; student?: { batch: string } }[]>([]);
+  const [subjectBatch, setSubjectBatch] = useState("All");
   const [loading, setLoading] = useState(true);
   const [batch, setBatch] = useState("All");
   const [center, setCenter] = useState("All");
+  const [batchCenter, setBatchCenter] = useState("All");
+  const [batchChartBatches, setBatchChartBatches] = useState<BatchAnalytics[]>([]);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const load = useCallback(async () => {
@@ -86,6 +90,14 @@ export default function DashboardPage() {
   }, [center]);
 
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
+
+  useEffect(() => {
+    const cp = batchCenter !== "All" ? `?center=${encodeURIComponent(batchCenter)}` : "";
+    fetch(`/api/admin/batches/analytics${cp}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((b: BatchAnalytics[]) => setBatchChartBatches(b))
+      .catch(() => {});
+  }, [batchCenter]);
 
   useEffect(() => {
     async function fetchSpark() {
@@ -112,17 +124,24 @@ export default function DashboardPage() {
     const cp = center !== "All" ? `&center=${encodeURIComponent(center)}` : "";
     fetch(`/api/admin/results/test/${encodeURIComponent(latest.testName)}?date=${latest.testDate}${cp}`)
       .then(r => r.ok ? r.json() : [])
-      .then((results: { scores: Record<string, number> }[]) => {
+      .then((results: { scores: Record<string, number>; student?: { batch: string } }[]) => {
         if (!results.length) return;
-        const subs = Object.keys(results[0].scores ?? {});
-        const COLORS = ["#6366F1","#08BD80","#F59E0B","#0891B2","#8B5CF6"];
-        setSubjectAvgs(subs.map((s, i) => ({
-          subject: s,
-          avg: Math.round(results.reduce((a, r) => a + (r.scores[s] ?? 0), 0) / results.length),
-          fill: COLORS[i % COLORS.length],
-        })));
+        setSubjectRaw(results);
       }).catch(() => {});
   }, [tests, center]);
+
+  useEffect(() => {
+    if (!subjectRaw.length) return;
+    const filtered = subjectBatch === "All" ? subjectRaw : subjectRaw.filter(r => r.student?.batch === subjectBatch);
+    if (!filtered.length) { setSubjectAvgs([]); return; }
+    const subs = Object.keys(filtered[0].scores ?? {});
+    const COLORS = ["#6366F1","#08BD80","#F59E0B","#0891B2","#8B5CF6"];
+    setSubjectAvgs(subs.map((s, i) => ({
+      subject: s,
+      avg: Math.round(filtered.reduce((a, r) => a + (r.scores[s] ?? 0), 0) / filtered.length),
+      fill: COLORS[i % COLORS.length],
+    })));
+  }, [subjectRaw, subjectBatch]);
 
   const allPresentIds = new Set(records.filter(r => r.type === "PUNCH_IN").map(r => r.studentId));
   const filtered = batch === "All" ? records : records.filter(r => r.student?.batch === batch);
@@ -137,9 +156,9 @@ export default function DashboardPage() {
   const summaries = Array.from(summaryMap.values());
   const attPct = students.length > 0 ? Math.round(allPresentIds.size / students.length * 100) : 0;
   const atRiskBatches = batches.filter(b => b.totalStudents > 0 && b.avgAttendancePct < 75).sort((a, b) => a.avgAttendancePct - b.avgAttendancePct);
-  const batchChartData = batches
+  const batchChartData = (batchChartBatches.length > 0 ? batchChartBatches : batches)
     .filter(b => b.totalStudents > 0)
-    .map(b => ({ name: b.name.length > 16 ? b.name.slice(0, 15) + "…" : b.name, fullName: b.name, pct: b.avgAttendancePct, fill: attColor(b.avgAttendancePct) }))
+    .map(b => ({ name: b.name.length > 12 ? b.name.slice(0, 11) + "…" : b.name, fullName: b.name, pct: b.avgAttendancePct, fill: attColor(b.avgAttendancePct) }))
     .sort((a, b) => b.pct - a.pct);
   const dateStr = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const refreshStr = lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -300,14 +319,22 @@ export default function DashboardPage() {
         {/* LEFT column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Batch attendance chart */}
+          {/* Batch attendance chart — vertical */}
           <div style={{ ...card, padding: 22 }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Batch Performance</div>
                 <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 2 }}>Average attendance % · last 30 days</div>
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Center dropdown */}
+                <select
+                  value={batchCenter}
+                  onChange={e => setBatchCenter(e.target.value)}
+                  style={{ padding: "4px 8px", borderRadius: 8, fontSize: 11, fontWeight: 600, background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", color: "var(--admin-text)", cursor: "pointer", outline: "none" }}
+                >
+                  {["All", "College Road", "Nashik Road"].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 {[{ label: "≥75%", color: "#08BD80" }, { label: "50–75%", color: "#F59E0B" }, { label: "<50%", color: "#FB923C" }].map(l => (
                   <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--admin-text-faint)" }}>
                     <div style={{ width: 7, height: 7, borderRadius: 2, background: l.color }} />
@@ -319,11 +346,19 @@ export default function DashboardPage() {
             {batchChartData.length === 0 ? (
               <div style={{ padding: "32px 0", textAlign: "center", color: "var(--admin-text-faint)", fontSize: 13 }}>No batch data yet</div>
             ) : (
-              <ResponsiveContainer width="100%" height={Math.max(140, batchChartData.length * 44)}>
-                <BarChart data={batchChartData} layout="vertical" margin={{ top: 0, right: 48, left: 0, bottom: 0 }} barCategoryGap="28%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.10)" horizontal={false} />
-                  <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} width={110} />
+              <ResponsiveContainer width="100%" height={Math.max(160, batchChartData.length * 52)}>
+                <BarChart data={batchChartData} margin={{ top: 4, right: 8, left: 0, bottom: batchChartData.length > 4 ? 50 : 16 }} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.10)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }}
+                    axisLine={false}
+                    tickLine={false}
+                    angle={batchChartData.length > 4 ? -35 : 0}
+                    textAnchor={batchChartData.length > 4 ? "end" : "middle"}
+                    interval={0}
+                  />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={36} />
                   <Tooltip
                     cursor={{ fill: "rgba(128,128,128,0.05)" }}
                     content={({ active, payload }) => {
@@ -337,7 +372,9 @@ export default function DashboardPage() {
                       );
                     }}
                   />
-                  <Bar dataKey="pct" name="Attendance" radius={[0, 6, 6, 0]} maxBarSize={20} label={{ position: "right", fontSize: 11, fontWeight: 700, formatter: (v: unknown) => `${v}%`, fill: "var(--admin-text-faint)" as string }} />
+                  <Bar dataKey="pct" name="Attendance" radius={[6, 6, 0, 0]} maxBarSize={40}
+                    label={{ position: "top", fontSize: 10, fontWeight: 700, formatter: (v: unknown) => `${v}%`, fill: "var(--admin-text-faint)" as string }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -381,31 +418,46 @@ export default function DashboardPage() {
           )}
 
           {/* Subject performance */}
-          {subjectAvgs.length > 0 && (
+          {subjectRaw.length > 0 && (
             <div style={{ ...card, padding: 22 }}>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Subject Performance</div>
-                <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 2 }}>
-                  Average scores · {tests[0]?.testName} ({tests[0]?.testDate})
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Subject Performance</div>
+                  <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 2 }}>
+                    Average scores · {tests[0]?.testName} ({tests[0]?.testDate})
+                  </div>
                 </div>
+                <select
+                  value={subjectBatch}
+                  onChange={e => setSubjectBatch(e.target.value)}
+                  style={{ padding: "4px 8px", borderRadius: 8, fontSize: 11, fontWeight: 600, background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", color: "var(--admin-text)", cursor: "pointer", outline: "none" }}
+                >
+                  {["All", ...Array.from(new Set(subjectRaw.map(r => r.student?.batch).filter((b): b is string => !!b)))].map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {subjectAvgs.sort((a, b) => b.avg - a.avg).map(s => {
-                  const maxAvg = Math.max(...subjectAvgs.map(x => x.avg), 1);
-                  const pct = Math.round(s.avg / maxAvg * 100);
-                  return (
-                    <div key={s.subject}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text)" }}>{s.subject}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: s.fill }}>{s.avg} avg</span>
+              {subjectAvgs.length === 0 ? (
+                <div style={{ padding: "16px 0", textAlign: "center", color: "var(--admin-text-faint)", fontSize: 12 }}>No results for this batch</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {[...subjectAvgs].sort((a, b) => b.avg - a.avg).map(s => {
+                    const maxAvg = Math.max(...subjectAvgs.map(x => x.avg), 1);
+                    const pct = Math.round(s.avg / maxAvg * 100);
+                    return (
+                      <div key={s.subject}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text)" }}>{s.subject}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: s.fill }}>{s.avg} avg</span>
+                        </div>
+                        <div style={{ height: 5, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: s.fill, borderRadius: 100, transition: "width 0.8s ease" }} />
+                        </div>
                       </div>
-                      <div style={{ height: 5, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: s.fill, borderRadius: 100, transition: "width 0.8s ease" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

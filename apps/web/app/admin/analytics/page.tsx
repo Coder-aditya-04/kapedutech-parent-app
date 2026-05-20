@@ -3,17 +3,20 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, BarChart, Bar, Legend,
 } from "recharts";
 
-type Student = { id: string; name: string; batch: string };
+type Student = { id: string; name: string; batch: string; center: string };
 type AttRecord = { studentId: string; type: "PUNCH_IN" | "PUNCH_OUT"; markedAt: string; student: Student };
 type BatchAnalytics = { id: string; name: string; totalStudents: number; avgAttendancePct: number };
 type TestMeta = { testName: string; testDate: string; count: number };
-type SubjectAvg = { subject: string; avg: number; fill: string };
-type SparkPoint = { date: string; label: string; present: number };
+type TestResult = { studentId: string; scores: Record<string, number>; student: { name: string; enrollmentNo: string; batch: string; center: string } };
+type SparkPoint = { date: string; label: string; cr: number; nr: number; total: number };
 
-function attColor(p: number) { return p >= 75 ? "#16A34A" : p >= 50 ? "#D97706" : "#DC2626"; }
+const CR_COLOR = "#08BD80";
+const NR_COLOR = "#6366F1";
+
+function attColor(p: number) { return p >= 75 ? "#08BD80" : p >= 50 ? "#F59E0B" : "#FB923C"; }
 
 const card: React.CSSProperties = {
   background: "var(--admin-card-bg)",
@@ -21,16 +24,35 @@ const card: React.CSSProperties = {
   borderRadius: 16,
 };
 
+function Select({ value, onChange, options, style }: { value: string; onChange: (v: string) => void; options: string[]; style?: React.CSSProperties }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        padding: "5px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+        background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)",
+        color: "var(--admin-text)", cursor: "pointer", outline: "none",
+        ...style,
+      }}
+    >
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
 export default function AnalyticsPage() {
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
   const [todayRecords, setTodayRecords] = useState<AttRecord[]>([]);
   const [batches, setBatches] = useState<BatchAnalytics[]>([]);
   const [tests, setTests] = useState<TestMeta[]>([]);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [sparkData, setSparkData] = useState<SparkPoint[]>([]);
-  const [subjectAvgs, setSubjectAvgs] = useState<SubjectAvg[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<7 | 14>(7);
+  const [selectedTest, setSelectedTest] = useState("");
+  const [selectedBatch, setSelectedBatch] = useState("All");
 
   const load = useCallback(async () => {
     try {
@@ -40,16 +62,22 @@ export default function AnalyticsPage() {
         fetch("/api/admin/batches/analytics"),
         fetch("/api/admin/results/tests"),
       ]);
-      setStudents(sRes.ok ? await sRes.json() : []);
-      setTodayRecords(aRes.ok ? await aRes.json() : []);
-      setBatches(bRes.ok ? await bRes.json() : []);
-      setTests(tRes.ok ? await tRes.json() : []);
+      const stu: Student[] = sRes.ok ? await sRes.json() : [];
+      const att: AttRecord[] = aRes.ok ? await aRes.json() : [];
+      const bat: BatchAnalytics[] = bRes.ok ? await bRes.json() : [];
+      const tst: TestMeta[] = tRes.ok ? await tRes.json() : [];
+      setStudents(stu);
+      setTodayRecords(att);
+      setBatches(bat);
+      setTests(tst);
+      if (tst.length > 0) setSelectedTest(`${tst[0].testName}|||${tst[0].testDate}`);
     } catch {}
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  // Fetch center-split sparkline data
   useEffect(() => {
     async function fetchSpark() {
       const days = Array.from({ length: range }, (_, i) => {
@@ -61,13 +89,13 @@ export default function AnalyticsPage() {
       });
       try {
         const results = await Promise.all(days.map(async ({ date, label }) => {
-          try {
-            const res = await fetch(`/api/admin/attendance/date?date=${date}`);
-            const recs: AttRecord[] = res.ok ? await res.json() : [];
-            return { date, label, present: new Set(recs.filter(r => r.type === "PUNCH_IN").map(r => r.studentId)).size };
-          } catch {
-            return { date, label, present: 0 };
-          }
+          const [rAll, rCR, rNR] = await Promise.all([
+            fetch(`/api/admin/attendance/date?date=${date}`).then(r => r.ok ? r.json() : []),
+            fetch(`/api/admin/attendance/date?date=${date}&center=College+Road`).then(r => r.ok ? r.json() : []),
+            fetch(`/api/admin/attendance/date?date=${date}&center=Nashik+Road`).then(r => r.ok ? r.json() : []),
+          ]);
+          const count = (recs: AttRecord[]) => new Set(recs.filter(r => r.type === "PUNCH_IN").map(r => r.studentId)).size;
+          return { date, label, total: count(rAll), cr: count(rCR), nr: count(rNR) };
         }));
         setSparkData(results);
       } catch {}
@@ -75,54 +103,60 @@ export default function AnalyticsPage() {
     fetchSpark();
   }, [range]);
 
+  // Fetch test results when selected test changes
   useEffect(() => {
-    if (!tests.length) return;
-    const latest = tests[0];
-    fetch(`/api/admin/results/test/${encodeURIComponent(latest.testName)}?date=${latest.testDate}`)
+    if (!selectedTest) return;
+    const [name, date] = selectedTest.split("|||");
+    fetch(`/api/admin/results/test/${encodeURIComponent(name)}?date=${date}`)
       .then(r => r.ok ? r.json() : [])
-      .then((results: { scores: Record<string, number> }[]) => {
-        if (!results.length) return;
-        const subs = Object.keys(results[0].scores ?? {});
-        const COLORS = ["#6366F1", "#059669", "#F59E0B", "#EF4444", "#0891B2"];
-        setSubjectAvgs(subs.map((s, i) => ({
-          subject: s,
-          avg: Math.round(results.reduce((a, r) => a + (r.scores[s] ?? 0), 0) / results.length),
-          fill: COLORS[i % COLORS.length],
-        })));
-      }).catch(() => {});
-  }, [tests]);
+      .then((res: TestResult[]) => setTestResults(res))
+      .catch(() => {});
+  }, [selectedTest]);
 
-  /* ── Derived funnel data ── */
+  /* ── Derived ── */
   const presentIds = new Set(todayRecords.filter(r => r.type === "PUNCH_IN").map(r => r.studentId));
-  const completedIds = new Set(
-    [...presentIds].filter(id => todayRecords.some(r => r.studentId === id && r.type === "PUNCH_OUT"))
-  );
+  const completedIds = new Set([...presentIds].filter(id => todayRecords.some(r => r.studentId === id && r.type === "PUNCH_OUT")));
   const inProgressCount = presentIds.size - completedIds.size;
   const absentCount = Math.max(students.length - presentIds.size, 0);
-  const totalPresent = presentIds.size;
 
-  const funnelRows = [
-    { label: "Total Enrolled",   value: students.length,     pct: 100,                                                                            color: "var(--admin-accent)" },
-    { label: "Arrived Today",    value: totalPresent,         pct: students.length > 0 ? Math.round(totalPresent / students.length * 100) : 0,     color: "#16A34A" },
-    { label: "Full Attendance",  value: completedIds.size,    pct: students.length > 0 ? Math.round(completedIds.size / students.length * 100) : 0, color: "#6366F1" },
-    { label: "Absent",           value: absentCount,          pct: students.length > 0 ? Math.round(absentCount / students.length * 100) : 0,      color: "#DC2626" },
-  ];
+  const crStudents = students.filter(s => s.center === "College Road");
+  const nrStudents = students.filter(s => s.center === "Nashik Road");
+  const crPresent = todayRecords.filter(r => r.type === "PUNCH_IN" && crStudents.some(s => s.id === r.studentId)).length;
+  const nrPresent = todayRecords.filter(r => r.type === "PUNCH_IN" && nrStudents.some(s => s.id === r.studentId)).length;
 
   const pieData = [
-    { name: "Full Day",     value: completedIds.size, color: "#16A34A" },
-    { name: "In Progress",  value: inProgressCount,   color: "#D97706" },
-    { name: "Absent",       value: absentCount,        color: "#DC2626" },
+    { name: "Full Day", value: completedIds.size, color: "#08BD80" },
+    { name: "In Progress", value: inProgressCount, color: "#F59E0B" },
+    { name: "Absent", value: absentCount, color: "#FB923C" },
   ].filter(d => d.value > 0);
 
-  const sortedBatches = [...batches].filter(b => b.totalStudents > 0).sort((a, b) => b.avgAttendancePct - a.avgAttendancePct);
-  const sparkMax = sparkData.length > 0 ? Math.max(...sparkData.map(d => d.present), 1) : 10;
+  // Subject averages, filtered by batch
+  const filteredResults = selectedBatch === "All"
+    ? testResults
+    : testResults.filter(r => r.student?.batch === selectedBatch);
 
+  const allBatches = ["All", ...Array.from(new Set(testResults.map(r => r.student?.batch).filter(Boolean)))];
+
+  const subjectAvgs = filteredResults.length > 0
+    ? (() => {
+        const COLORS = ["#6366F1", "#08BD80", "#F59E0B", "#0891B2", "#8B5CF6", "#EC4899"];
+        const subs = Object.keys(filteredResults[0]?.scores ?? {});
+        return subs.map((s, i) => ({
+          subject: s,
+          avg: Math.round(filteredResults.reduce((a, r) => a + (r.scores[s] ?? 0), 0) / filteredResults.length),
+          fill: COLORS[i % COLORS.length],
+        }));
+      })()
+    : [];
+
+  const sortedBatches = [...batches].filter(b => b.totalStudents > 0).sort((a, b) => b.avgAttendancePct - a.avgAttendancePct);
+  const sparkMax = sparkData.length > 0 ? Math.max(...sparkData.map(d => Math.max(d.cr, d.nr, d.total)), 1) : 10;
   const dateStr = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
     <div className="admin-page" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "var(--admin-text)", letterSpacing: "-0.3px" }}>Analytics</h1>
@@ -130,27 +164,47 @@ export default function AnalyticsPage() {
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {([7, 14] as const).map(r => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              style={{
-                padding: "8px 16px", borderRadius: 8,
-                border: "1px solid var(--admin-card-border)",
-                background: range === r ? "var(--admin-accent)" : "var(--admin-input-bg)",
-                color: range === r ? "#fff" : "var(--admin-text-muted)",
-                fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-              }}
-            >
-              Last {r} days
-            </button>
+            <button key={r} onClick={() => setRange(r)} style={{
+              padding: "8px 16px", borderRadius: 8, border: "1px solid var(--admin-card-border)",
+              background: range === r ? "var(--admin-accent)" : "var(--admin-input-bg)",
+              color: range === r ? "#fff" : "var(--admin-text-muted)",
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>Last {r} days</button>
           ))}
         </div>
       </div>
 
-      {/* ── Row 1: Funnel + Donut ────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
+      {/* ── Center comparison hero ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        {[
+          { label: "College Road", present: crPresent, total: crStudents.length, color: CR_COLOR, softColor: "rgba(8,189,128,0.12)" },
+          { label: "Nashik Road",  present: nrPresent, total: nrStudents.length, color: NR_COLOR, softColor: "rgba(99,102,241,0.12)" },
+        ].map(c => {
+          const pct = c.total > 0 ? Math.round(c.present / c.total * 100) : 0;
+          return (
+            <div key={c.label} style={{ ...card, padding: "18px 22px", display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: c.softColor, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>{c.label}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", letterSpacing: "-1px", lineHeight: 1 }}>{c.present}</span>
+                  <span style={{ fontSize: 13, color: "var(--admin-text-faint)" }}>/ {c.total}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 14, fontWeight: 700, color: c.color }}>{pct}%</span>
+                </div>
+                <div style={{ height: 4, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden", marginTop: 8 }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: c.color, borderRadius: 100, transition: "width 0.9s ease" }} />
+                </div>
+                <div style={{ fontSize: 10, color: "var(--admin-text-faint)", marginTop: 5 }}>Present today · {c.total} enrolled</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Attendance Funnel */}
+      {/* ── Row 1: Funnel + Donut ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
         <div style={{ ...card, padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
             <div>
@@ -160,7 +214,12 @@ export default function AnalyticsPage() {
             <span style={{ fontSize: 10, color: "var(--admin-text-faint)", background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 6, padding: "4px 10px", fontWeight: 600 }}>Today</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {funnelRows.map((f, i) => (
+            {[
+              { label: "Total Enrolled",  value: students.length,    pct: 100, color: "var(--admin-accent)" },
+              { label: "Arrived Today",   value: presentIds.size,    pct: students.length > 0 ? Math.round(presentIds.size / students.length * 100) : 0, color: "#08BD80" },
+              { label: "Full Attendance", value: completedIds.size,  pct: students.length > 0 ? Math.round(completedIds.size / students.length * 100) : 0, color: "#6366F1" },
+              { label: "Absent",          value: absentCount,         pct: students.length > 0 ? Math.round(absentCount / students.length * 100) : 0, color: "#FB923C" },
+            ].map((f, i) => (
               <div key={i}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <span style={{ fontSize: 13, color: "var(--admin-text-muted)", fontWeight: 500 }}>{f.label}</span>
@@ -177,12 +236,9 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Outcome Breakdown donut */}
         <div style={{ ...card, padding: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Outcome Breakdown</div>
           <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 20 }}>Today's attendance status</div>
-
-          {/* Donut chart */}
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
             {loading || students.length === 0 ? (
               <div style={{ width: 130, height: 130, borderRadius: "50%", background: "var(--admin-input-bg)", border: "2px solid var(--admin-card-border)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -193,26 +249,22 @@ export default function AnalyticsPage() {
                 <ResponsiveContainer width={130} height={130}>
                   <PieChart>
                     <Pie data={pieData.length > 0 ? pieData : [{ name: "No data", value: 1, color: "var(--admin-card-border)" }]} cx={60} cy={60} innerRadius={42} outerRadius={60} paddingAngle={2} dataKey="value" strokeWidth={0}>
-                      {(pieData.length > 0 ? pieData : [{ color: "var(--admin-card-border)" }]).map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
+                      {(pieData.length > 0 ? pieData : [{ color: "var(--admin-card-border)" }]).map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", pointerEvents: "none" }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: "var(--admin-text)", letterSpacing: "-1px", lineHeight: 1 }}>{totalPresent}</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: "var(--admin-text)", letterSpacing: "-1px", lineHeight: 1 }}>{presentIds.size}</div>
                   <div style={{ fontSize: 9, color: "var(--admin-text-faint)", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>present</div>
                 </div>
               </div>
             )}
           </div>
-
-          {/* Legend */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { label: "Full Day",    value: completedIds.size, color: "#16A34A" },
-              { label: "In Progress", value: inProgressCount,   color: "#D97706" },
-              { label: "Absent",      value: absentCount,        color: "#DC2626" },
+              { label: "Full Day",    value: completedIds.size, color: "#08BD80" },
+              { label: "In Progress", value: inProgressCount,   color: "#F59E0B" },
+              { label: "Absent",      value: absentCount,        color: "#FB923C" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -231,88 +283,111 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* ── Row 2: Daily trend chart ─────────────────────────────────────── */}
+      {/* ── Center Comparison Chart ── */}
       <div style={{ ...card, padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Daily Attendance</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Center Comparison</div>
             <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 3 }}>Students present · last {range} days</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--admin-text-faint)" }}>
-            <div style={{ width: 16, height: 2, background: "var(--admin-accent)", borderRadius: 1 }} />
-            Students present
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--admin-text-faint)" }}>
+              <div style={{ width: 16, height: 3, background: CR_COLOR, borderRadius: 2 }} /> College Road
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--admin-text-faint)" }}>
+              <div style={{ width: 16, height: 3, background: NR_COLOR, borderRadius: 2 }} /> Nashik Road
+            </div>
           </div>
         </div>
         {sparkData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={sparkData} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
-              <defs>
-                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--admin-accent)" stopOpacity="0.15" />
-                  <stop offset="100%" stopColor="var(--admin-accent)" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} />
-              <YAxis
-                domain={[0, Math.max(sparkMax + 2, students.length > 0 ? Math.ceil(students.length * 1.1) : 10)]}
-                tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }}
-                axisLine={false}
-                tickLine={false}
-                width={30}
-              />
-              <Tooltip
-                content={({ active, payload }) => {
+          <>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={sparkData} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, Math.max(sparkMax + 2, 10)]} tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   return (
-                    <div style={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, padding: "8px 14px", fontSize: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.12)" }}>
-                      <div style={{ color: "var(--admin-text-faint)", marginBottom: 3 }}>{payload[0].payload.label}</div>
-                      <div style={{ fontWeight: 700, color: "var(--admin-accent)", fontSize: 15 }}>{payload[0].value} students</div>
+                    <div style={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+                      <div style={{ color: "var(--admin-text-faint)", marginBottom: 6, fontWeight: 600 }}>{payload[0]?.payload?.label}</div>
+                      {payload.map((p, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color as string }} />
+                          <span style={{ color: "var(--admin-text-muted)" }}>{p.name}:</span>
+                          <span style={{ fontWeight: 700, color: p.color as string }}>{p.value}</span>
+                        </div>
+                      ))}
                     </div>
                   );
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="present"
-                stroke="var(--admin-accent)"
-                strokeWidth={2}
-                dot={{ r: 3, fill: "var(--admin-accent)", strokeWidth: 0 }}
-                activeDot={{ r: 5, fill: "var(--admin-accent)", strokeWidth: 0 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-faint)", fontSize: 13 }}>
-            Loading attendance data…
-          </div>
-        )}
+                }} />
+                <Line type="monotone" dataKey="cr" name="College Road" stroke={CR_COLOR} strokeWidth={2} dot={{ r: 3, fill: CR_COLOR, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="nr" name="Nashik Road" stroke={NR_COLOR} strokeWidth={2} dot={{ r: 3, fill: NR_COLOR, strokeWidth: 0 }} activeDot={{ r: 5 }} strokeDasharray="5 3" />
+              </LineChart>
+            </ResponsiveContainer>
 
-        {/* Summary strip */}
-        {sparkData.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--admin-card-border)" }}>
-            {[
-              { label: "Peak Day", value: `${Math.max(...sparkData.map(d => d.present))} students`, color: "#16A34A" },
-              { label: "Lowest Day", value: `${Math.min(...sparkData.map(d => d.present))} students`, color: "#DC2626" },
-              { label: "7-Day Avg", value: `${Math.round(sparkData.reduce((a, d) => a + d.present, 0) / sparkData.length)} students`, color: "var(--admin-accent)" },
-              { label: "Today", value: `${sparkData.at(-1)?.present ?? 0} students`, color: "var(--admin-text)" },
-            ].map((s, i) => (
-              <div key={i} style={{ padding: "10px 14px", background: "var(--admin-input-bg)", borderRadius: 10, border: "1px solid var(--admin-card-border)" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 4 }}>{s.label}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{s.value}</div>
-              </div>
-            ))}
-          </div>
+            {/* Summary strip */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--admin-card-border)" }}>
+              {[
+                { label: "CR Peak",   value: `${Math.max(...sparkData.map(d => d.cr))} students`,  color: CR_COLOR },
+                { label: "NR Peak",   value: `${Math.max(...sparkData.map(d => d.nr))} students`,  color: NR_COLOR },
+                { label: "CR Avg",    value: `${Math.round(sparkData.reduce((a, d) => a + d.cr, 0) / sparkData.length)} students`, color: CR_COLOR },
+                { label: "NR Avg",    value: `${Math.round(sparkData.reduce((a, d) => a + d.nr, 0) / sparkData.length)} students`, color: NR_COLOR },
+              ].map((s, i) => (
+                <div key={i} style={{ padding: "10px 14px", background: "var(--admin-input-bg)", borderRadius: 10, border: "1px solid var(--admin-card-border)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 4 }}>{s.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-faint)", fontSize: 13 }}>Loading data…</div>
         )}
       </div>
 
-      {/* ── Row 3: Batch ranking + Subject performance ───────────────────── */}
+      {/* ── Center vs Center bar comparison ── */}
+      {sparkData.length > 0 && (
+        <div style={{ ...card, padding: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Daily Attendance by Center</div>
+            <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 3 }}>Side-by-side comparison · last {range} days</div>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={sparkData} margin={{ top: 4, right: 12, left: -16, bottom: 0 }} barCategoryGap="30%">
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} width={28} />
+              <Tooltip content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div style={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, padding: "8px 12px", fontSize: 12 }}>
+                    <div style={{ color: "var(--admin-text-faint)", marginBottom: 4 }}>{payload[0]?.payload?.label}</div>
+                    {payload.map((p, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 2 }}>
+                        <div style={{ width: 8, height: 8, background: p.fill as string, borderRadius: 2 }} />
+                        <span style={{ color: "var(--admin-text-muted)" }}>{p.name}:</span>
+                        <span style={{ fontWeight: 700, color: "var(--admin-text)" }}>{p.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }} />
+              <Bar dataKey="cr" name="College Road" fill={CR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="nr" name="Nashik Road" fill={NR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "var(--admin-text-muted)" }} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ── Batch ranking + Subject performance ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
         {/* Batch ranking */}
         <div style={{ ...card, padding: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Batch Ranking</div>
-          <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 20 }}>Sorted by average attendance performance</div>
+          <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 20 }}>Sorted by average attendance · last 30 days</div>
           {loading ? (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--admin-text-faint)", fontSize: 13 }}>Loading…</div>
           ) : sortedBatches.length === 0 ? (
@@ -320,11 +395,7 @@ export default function AnalyticsPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {sortedBatches.map((b, i) => (
-                <div
-                  key={b.id}
-                  style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
-                  onClick={() => router.push(`/admin/batches/${encodeURIComponent(b.name)}`)}
-                >
+                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => router.push(`/admin/batches/${encodeURIComponent(b.name)}`)}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-faint)", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
@@ -342,12 +413,36 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Subject performance */}
+        {/* Subject performance with batch dropdown */}
         <div style={{ ...card, padding: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Subject Performance</div>
-          <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 20 }}>
-            {tests.length > 0 ? `${tests[0].testName} · ${tests[0].testDate}` : "No test data yet"}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Subject Performance</div>
+              <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 3 }}>
+                {tests.length > 0 ? "Average scores by batch" : "No test data yet"}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {tests.length > 0 && (
+                <Select
+                  value={selectedTest}
+                  onChange={setSelectedTest}
+                  options={tests.map(t => `${t.testName}|||${t.testDate}`)}
+                  style={{ maxWidth: 130 }}
+                />
+              )}
+              {allBatches.length > 1 && (
+                <Select value={selectedBatch} onChange={setSelectedBatch} options={allBatches} />
+              )}
+            </div>
           </div>
+          {/* Show selected test name cleanly */}
+          {selectedTest && (
+            <div style={{ fontSize: 11, color: "var(--admin-accent)", fontWeight: 600, marginBottom: 16 }}>
+              {selectedTest.split("|||")[0]} · {selectedTest.split("|||")[1]}
+              {selectedBatch !== "All" && <span style={{ color: "var(--admin-text-faint)", fontWeight: 400 }}> · {selectedBatch}</span>}
+            </div>
+          )}
 
           {subjectAvgs.length === 0 ? (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--admin-text-faint)", fontSize: 13 }}>
@@ -373,15 +468,12 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {/* Test history footer */}
           {tests.length > 1 && (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--admin-card-border)" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Recent Tests</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {tests.slice(0, 4).map((t, i) => (
-                  <div
-                    key={i}
-                    onClick={() => router.push(`/admin/results?test=${encodeURIComponent(t.testName)}&date=${t.testDate}`)}
+                  <div key={i} onClick={() => router.push(`/admin/results?test=${encodeURIComponent(t.testName)}&date=${t.testDate}`)}
                     style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: "var(--admin-input-bg)", borderRadius: 8, border: "1px solid var(--admin-card-border)", cursor: "pointer", transition: "border-color 0.15s" }}
                     onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--admin-accent)")}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--admin-card-border)")}
@@ -396,10 +488,8 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* ── Row 4: Key metrics strip ─────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-
-        {/* Attendance health */}
+      {/* ── Health + Engagement ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
         <div style={{ ...card, padding: 22 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Attendance Health</div>
           <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 16 }}>Batch status overview</div>
@@ -409,12 +499,12 @@ export default function AnalyticsPage() {
             <>
               <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
                 {[
-                  { label: "Healthy", value: batches.filter(b => b.avgAttendancePct >= 75).length, color: "#16A34A" },
-                  { label: "Warning", value: batches.filter(b => b.avgAttendancePct >= 50 && b.avgAttendancePct < 75).length, color: "#D97706" },
-                  { label: "Critical", value: batches.filter(b => b.avgAttendancePct < 50).length, color: "#DC2626" },
+                  { label: "Healthy",  value: batches.filter(b => b.avgAttendancePct >= 75).length,                                          color: "#08BD80" },
+                  { label: "Warning",  value: batches.filter(b => b.avgAttendancePct >= 50 && b.avgAttendancePct < 75).length,               color: "#F59E0B" },
+                  { label: "Critical", value: batches.filter(b => b.avgAttendancePct < 50).length,                                           color: "#FB923C" },
                 ].map((s, i) => (
                   <div key={i} style={{ flex: 1, padding: "10px 12px", background: `${s.color}0a`, border: `1px solid ${s.color}20`, borderRadius: 10, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "var(--admin-text)", letterSpacing: "-1px" }}>{s.value}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "var(--admin-text)", letterSpacing: "-1px" }}>{s.value}</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: s.color, marginTop: 2 }}>{s.label}</div>
                   </div>
                 ))}
@@ -427,9 +517,9 @@ export default function AnalyticsPage() {
                   const c = batches.filter(b => b.avgAttendancePct < 50).length;
                   return (
                     <>
-                      <div style={{ width: `${total > 0 ? (h / total) * 100 : 0}%`, height: "100%", background: "#16A34A" }} />
-                      <div style={{ width: `${total > 0 ? (w / total) * 100 : 0}%`, height: "100%", background: "#D97706" }} />
-                      <div style={{ width: `${total > 0 ? (c / total) * 100 : 0}%`, height: "100%", background: "#DC2626" }} />
+                      <div style={{ width: `${total > 0 ? (h / total) * 100 : 0}%`, height: "100%", background: "#08BD80" }} />
+                      <div style={{ width: `${total > 0 ? (w / total) * 100 : 0}%`, height: "100%", background: "#F59E0B" }} />
+                      <div style={{ width: `${total > 0 ? (c / total) * 100 : 0}%`, height: "100%", background: "#FB923C" }} />
                     </>
                   );
                 })()}
@@ -438,15 +528,14 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Student engagement */}
         <div style={{ ...card, padding: 22 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Student Engagement</div>
           <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 16 }}>Today's punch-in patterns</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { label: "On time (before 9 AM)", value: todayRecords.filter(r => r.type === "PUNCH_IN" && new Date(r.markedAt).getHours() < 9).length, color: "#16A34A" },
-              { label: "Late (9 AM – 10 AM)", value: todayRecords.filter(r => r.type === "PUNCH_IN" && new Date(r.markedAt).getHours() >= 9 && new Date(r.markedAt).getHours() < 10).length, color: "#D97706" },
-              { label: "Very late (after 10 AM)", value: todayRecords.filter(r => r.type === "PUNCH_IN" && new Date(r.markedAt).getHours() >= 10).length, color: "#DC2626" },
+              { label: "On time (before 9 AM)",   value: todayRecords.filter(r => r.type === "PUNCH_IN" && new Date(r.markedAt).getHours() < 9).length,                                                    color: "#08BD80" },
+              { label: "Late (9 AM – 10 AM)",     value: todayRecords.filter(r => r.type === "PUNCH_IN" && new Date(r.markedAt).getHours() >= 9 && new Date(r.markedAt).getHours() < 10).length,          color: "#F59E0B" },
+              { label: "Very late (after 10 AM)", value: todayRecords.filter(r => r.type === "PUNCH_IN" && new Date(r.markedAt).getHours() >= 10).length,                                                   color: "#FB923C" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -459,21 +548,18 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Quick nav */}
         <div style={{ ...card, padding: 22 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", marginBottom: 3 }}>Quick Navigation</div>
           <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginBottom: 16 }}>Jump to any section</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {[
-              { label: "Dashboard",      href: "/admin/dashboard",  color: "#1D6BF3" },
-              { label: "Students",       href: "/admin/students",   color: "#7C3AED" },
-              { label: "Attendance",     href: "/admin/attendance", color: "#16A34A" },
-              { label: "Test Results",   href: "/admin/results",    color: "#D97706" },
-              { label: "Batch Details",  href: "/admin/batches",    color: "#0891B2" },
+              { label: "Dashboard",     href: "/admin/dashboard",  color: "#0EA5E9" },
+              { label: "Students",      href: "/admin/students",   color: "#8B5CF6" },
+              { label: "Attendance",    href: "/admin/attendance", color: "#08BD80" },
+              { label: "Test Results",  href: "/admin/results",    color: "#F59E0B" },
+              { label: "Batch Details", href: "/admin/batches",    color: "#0891B2" },
             ].map(a => (
-              <button
-                key={a.href}
-                onClick={() => router.push(a.href)}
+              <button key={a.href} onClick={() => router.push(a.href)}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: `${a.color}08`, border: `1px solid ${a.color}18`, borderRadius: 9, cursor: "pointer", textAlign: "left", transition: "all 0.15s" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = `${a.color}14`; (e.currentTarget as HTMLButtonElement).style.borderColor = `${a.color}36`; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = `${a.color}08`; (e.currentTarget as HTMLButtonElement).style.borderColor = `${a.color}18`; }}
