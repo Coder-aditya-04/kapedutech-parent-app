@@ -111,15 +111,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside className={`admin-sidebar${sidebarOpen ? " open" : ""}`}>
 
-        {/* Logo area */}
-        <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid var(--admin-sidebar-border)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-          <Image src={darkMode ? "/kap_logo_transparent.png" : "/kap_fav.png"} alt="KAP Edutech" width={156} height={50} style={{ objectFit: "contain", width: "100%", height: "auto", maxHeight: 52, filter: darkMode ? "brightness(0) invert(1)" : "none" }} priority />
-          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--admin-text-faint)", letterSpacing: 2, textTransform: "uppercase" }}>Admin Portal</span>
+        {/* Logo area — always on dark bg */}
+        <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          <Image src="/kap_logo_transparent.png" alt="KAP Edutech" width={148} height={48} style={{ objectFit: "contain", width: "100%", height: "auto", maxHeight: 48, filter: "brightness(0) invert(1)" }} priority />
+          <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase" }}>Admin Portal</span>
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: "10px 10px", display: "flex", flexDirection: "column", gap: 1 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--admin-text-faint)", letterSpacing: 1.5, textTransform: "uppercase", padding: "8px 10px 6px" }}>Navigation</div>
+        {/* Nav — always light text since sidebar is always dark */}
+        <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: 1 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.30)", letterSpacing: 1.5, textTransform: "uppercase", padding: "8px 10px 6px" }}>Navigation</div>
           {NAV.map(item => {
             const active = pathname.startsWith(item.href);
             return (
@@ -130,16 +130,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   style={{
                     display: "flex", alignItems: "center", gap: 10,
-                    padding: "9px 12px", borderRadius: 10,
-                    fontSize: 13.5, fontWeight: active ? 600 : 450,
-                    background: active ? "rgba(29,107,243,0.1)" : "transparent",
-                    color: active ? "var(--admin-accent)" : "var(--admin-text-muted)",
-                    borderLeft: `2px solid ${active ? "var(--admin-accent)" : "transparent"}`,
-                    transition: "background 0.15s, color 0.15s, border-color 0.15s",
+                    padding: "9px 12px", borderRadius: 8,
+                    fontSize: 13, fontWeight: active ? 600 : 450,
+                    background: active ? "linear-gradient(90deg, rgba(8,189,128,0.18), rgba(8,189,128,0.06))" : "transparent",
+                    color: active ? "#ffffff" : "rgba(255,255,255,0.60)",
+                    borderLeft: `2.5px solid ${active ? "#08BD80" : "transparent"}`,
+                    transition: "background 0.15s, color 0.15s",
                     position: "relative",
                   }}
                 >
-                  <span style={{ flexShrink: 0, opacity: active ? 1 : 0.7 }}>{item.icon}</span>
+                  <span style={{ flexShrink: 0, color: active ? "#08BD80" : "rgba(255,255,255,0.50)" }}>{item.icon}</span>
                   {item.label}
                   {active && (
                     <motion.div
@@ -147,7 +147,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       style={{
                         position: "absolute", right: 10,
                         width: 5, height: 5, borderRadius: "50%",
-                        background: "var(--admin-accent)",
+                        background: "#08BD80",
+                        boxShadow: "0 0 8px rgba(8,189,128,0.7)",
                       }}
                       transition={{ type: "spring", stiffness: 380, damping: 30 }}
                     />
@@ -158,48 +159,54 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* Mini attendance stats */}
+        {/* Mini attendance snap card — AI Caller style */}
         {sideStats && (
-          <div style={{ margin: "0 10px 8px", borderRadius: 12, background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", overflow: "hidden" }}>
-            <div style={{ padding: "10px 12px 8px" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--admin-text-faint)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 7 }}>Today&apos;s Attendance</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 7 }}>
-                <span style={{ fontSize: 22, fontWeight: 800, color: "var(--admin-accent)", letterSpacing: "-1px", lineHeight: 1 }}>{sideStats.present}</span>
-                <span style={{ fontSize: 11, color: "var(--admin-text-faint)" }}>/ {sideStats.total}</span>
-                <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: sideStats.total > 0 && sideStats.present / sideStats.total >= 0.75 ? "#16A34A" : sideStats.present / sideStats.total >= 0.5 ? "#D97706" : "#DC2626" }}>
-                  {sideStats.total > 0 ? Math.round(sideStats.present / sideStats.total * 100) : 0}%
-                </span>
-              </div>
-              <div style={{ height: 4, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden" }}>
-                <div style={{
-                  height: "100%",
-                  width: `${sideStats.total > 0 ? Math.round(sideStats.present / sideStats.total * 100) : 0}%`,
-                  background: sideStats.total > 0 && sideStats.present / sideStats.total >= 0.75 ? "#16A34A" : sideStats.total > 0 && sideStats.present / sideStats.total >= 0.5 ? "#D97706" : "#DC2626",
-                  borderRadius: 100, transition: "width 1s ease",
-                }} />
-              </div>
+          <div style={{
+            margin: "0 8px 8px",
+            borderRadius: 12,
+            background: "radial-gradient(circle at 100% 0%, rgba(99,102,241,0.18), transparent 60%), radial-gradient(circle at 0% 100%, rgba(8,189,128,0.14), transparent 55%), rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.09)",
+            padding: "12px 14px",
+            position: "relative", overflow: "hidden",
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 9 }}>Today&apos;s Attendance</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
+              <span style={{ fontSize: 24, fontWeight: 700, color: "#fff", letterSpacing: "-1px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{sideStats.present}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.40)", letterSpacing: 0 }}>/ {sideStats.total}</span>
+              <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#08BD80" }}>
+                {sideStats.total > 0 ? Math.round(sideStats.present / sideStats.total * 100) : 0}%
+              </span>
             </div>
-            <div style={{ padding: "6px 12px 8px", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>Present</span>
-              <span style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>{sideStats.total - sideStats.present} absent</span>
+            <div style={{ height: 5, background: "rgba(255,255,255,0.08)", borderRadius: 999, overflow: "hidden", marginBottom: 6 }}>
+              <div style={{
+                height: "100%",
+                width: `${sideStats.total > 0 ? Math.round(sideStats.present / sideStats.total * 100) : 0}%`,
+                background: "linear-gradient(90deg, #08BD80, #34D399)",
+                borderRadius: 999, transition: "width 1s ease",
+                boxShadow: "0 0 8px rgba(8,189,128,0.5)",
+              }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "rgba(255,255,255,0.38)" }}>
+              <span>Present</span>
+              <span>{sideStats.total - sideStats.present} absent</span>
             </div>
           </div>
         )}
 
-        {/* Footer */}
-        <div style={{ padding: "10px 10px 14px", borderTop: "1px solid var(--admin-sidebar-border)" }}>
-          <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--admin-input-bg)", marginBottom: 6, border: "1px solid var(--admin-card-border)" }}>
-            <div style={{ fontSize: 10, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.8 }}>Signed in as</div>
-            <div style={{ fontSize: 13, color: "var(--admin-text)", fontWeight: 600, marginTop: 2 }}>Admin</div>
+        {/* Footer — always dark sidebar context */}
+        <div style={{ padding: "10px 8px 14px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ padding: "9px 12px", borderRadius: 10, background: "rgba(255,255,255,0.04)", marginBottom: 6, border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: 0.8 }}>Signed in as</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600, marginTop: 2 }}>Admin</div>
           </div>
 
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={toggleDark}
             style={{
-              width: "100%", padding: "8px 12px", border: "1px solid var(--admin-card-border)",
+              width: "100%", padding: "8px 12px", border: "1px solid rgba(255,255,255,0.10)",
               borderRadius: 10, background: "transparent",
-              color: "var(--admin-text-muted)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+              color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 500, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 8, marginBottom: 6,
             }}
           >
@@ -211,9 +218,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             whileTap={{ scale: 0.97 }}
             onClick={handleLogout}
             style={{
-              width: "100%", padding: "8px 12px", border: "1px solid var(--admin-card-border)",
+              width: "100%", padding: "8px 12px", border: "1px solid rgba(255,255,255,0.10)",
               borderRadius: 10, background: "transparent",
-              color: "var(--admin-text-muted)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+              color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 500, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 8,
             }}
           >

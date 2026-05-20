@@ -22,6 +22,7 @@ model Student {
   enrollmentNo     String
   name             String       @default("")
   batch            String       @default("")
+  center           String       @default("College Road")
   qrCode           String       @unique
   qrCodeGenerated  Boolean      @default(false)
   parentId         String

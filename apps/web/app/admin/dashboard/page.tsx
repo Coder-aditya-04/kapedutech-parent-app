@@ -12,10 +12,10 @@ type BatchAnalytics = { id: string; name: string; totalStudents: number; avgAtte
 type TestMeta = { testName: string; testDate: string; count: number };
 type SubjectAvg = { subject: string; avg: number; fill: string };
 
-const PALETTE = ["#1D6BF3","#7C3AED","#0D9488","#B45309","#0891B2","#BE185D","#16A34A","#DC2626"];
-function batchColor(name: string, all: string[]) { return PALETTE[all.indexOf(name) % PALETTE.length] ?? "#1D6BF3"; }
-function attColor(p: number) { return p >= 75 ? "#16A34A" : p >= 50 ? "#D97706" : "#DC2626"; }
-function attBg(p: number) { return p >= 75 ? "rgba(22,163,74,0.08)" : p >= 50 ? "rgba(217,119,6,0.08)" : "rgba(220,38,38,0.08)"; }
+const PALETTE = ["#6366F1","#0D9488","#F59E0B","#0891B2","#8B5CF6","#BE185D","#08BD80","#EC4899"];
+function batchColor(name: string, all: string[]) { return PALETTE[all.indexOf(name) % PALETTE.length] ?? "#6366F1"; }
+function attColor(p: number) { return p >= 75 ? "#08BD80" : p >= 50 ? "#F59E0B" : "#FB923C"; }
+function attBg(p: number) { return p >= 75 ? "rgba(8,189,128,0.08)" : p >= 50 ? "rgba(245,158,11,0.08)" : "rgba(251,146,60,0.08)"; }
 function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
@@ -49,6 +49,8 @@ function Sparkline({ data, color = "#3B82F6", w = 120, h = 36 }: { data: number[
   );
 }
 
+const CENTERS = ["All", "College Road", "Nashik Road"];
+
 export default function DashboardPage() {
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
@@ -60,15 +62,17 @@ export default function DashboardPage() {
   const [subjectAvgs, setSubjectAvgs] = useState<SubjectAvg[]>([]);
   const [loading, setLoading] = useState(true);
   const [batch, setBatch] = useState("All");
+  const [center, setCenter] = useState("All");
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const load = useCallback(async () => {
     try {
+      const cp = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
       const [sRes, aRes, bRes, tRes] = await Promise.all([
-        fetch("/api/admin/students"),
-        fetch("/api/admin/attendance/today"),
-        fetch("/api/admin/batches/analytics"),
-        fetch("/api/admin/results/tests"),
+        fetch(`/api/admin/students${cp}`),
+        fetch(`/api/admin/attendance/today${cp}`),
+        fetch(`/api/admin/batches/analytics${cp}`),
+        fetch(`/api/admin/results/tests${cp}`),
       ]);
       const stu: Student[] = sRes.ok ? await sRes.json() : [];
       const att: AttendanceRecord[] = aRes.ok ? await aRes.json() : [];
@@ -79,7 +83,7 @@ export default function DashboardPage() {
       setLastRefresh(new Date());
     } catch {}
     setLoading(false);
-  }, []);
+  }, [center]);
 
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
 
@@ -90,8 +94,9 @@ export default function DashboardPage() {
         return { date: d.toISOString().slice(0, 10), label: d.toLocaleDateString("en-IN", { weekday: "short" }) };
       });
       try {
+        const cp = center !== "All" ? `&center=${encodeURIComponent(center)}` : "";
         const results = await Promise.all(days.map(async ({ date, label }) => {
-          const res = await fetch(`/api/admin/attendance/date?date=${date}`);
+          const res = await fetch(`/api/admin/attendance/date?date=${date}${cp}`);
           const recs: AttendanceRecord[] = res.ok ? await res.json() : [];
           return { date, label, present: new Set(recs.filter(r => r.type === "PUNCH_IN").map(r => r.studentId)).size };
         }));
@@ -99,24 +104,25 @@ export default function DashboardPage() {
       } catch {}
     }
     fetchSpark();
-  }, []);
+  }, [center]);
 
   useEffect(() => {
     if (!tests.length) return;
     const latest = tests[0];
-    fetch(`/api/admin/results/test/${encodeURIComponent(latest.testName)}?date=${latest.testDate}`)
+    const cp = center !== "All" ? `&center=${encodeURIComponent(center)}` : "";
+    fetch(`/api/admin/results/test/${encodeURIComponent(latest.testName)}?date=${latest.testDate}${cp}`)
       .then(r => r.ok ? r.json() : [])
       .then((results: { scores: Record<string, number> }[]) => {
         if (!results.length) return;
         const subs = Object.keys(results[0].scores ?? {});
-        const COLORS = ["#6366F1","#059669","#F59E0B","#EF4444","#0891B2"];
+        const COLORS = ["#6366F1","#08BD80","#F59E0B","#0891B2","#8B5CF6"];
         setSubjectAvgs(subs.map((s, i) => ({
           subject: s,
           avg: Math.round(results.reduce((a, r) => a + (r.scores[s] ?? 0), 0) / results.length),
           fill: COLORS[i % COLORS.length],
         })));
       }).catch(() => {});
-  }, [tests]);
+  }, [tests, center]);
 
   const allPresentIds = new Set(records.filter(r => r.type === "PUNCH_IN").map(r => r.studentId));
   const filtered = batch === "All" ? records : records.filter(r => r.student?.batch === batch);
@@ -153,7 +159,13 @@ export default function DashboardPage() {
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <div style={{
         position: "relative", overflow: "hidden", borderRadius: 18,
-        background: "linear-gradient(135deg, #0e1022 0%, #17204a 45%, #1c2f72 100%)",
+        background: [
+          "radial-gradient(circle at 8% 20%, rgba(8,189,128,0.55), transparent 45%)",
+          "radial-gradient(circle at 100% 35%, rgba(99,102,241,0.45), transparent 55%)",
+          "radial-gradient(circle at 75% 110%, rgba(236,72,153,0.30), transparent 55%)",
+          "radial-gradient(circle at 30% 110%, rgba(245,158,11,0.22), transparent 50%)",
+          "linear-gradient(135deg, #0E1A22 0%, #0B1B1E 50%, #0A1A1F 100%)",
+        ].join(","),
         border: "1px solid rgba(255,255,255,0.08)",
         padding: "22px 28px",
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
@@ -168,7 +180,7 @@ export default function DashboardPage() {
           </svg>
         </div>
         {/* Subtle left glow */}
-        <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 160, background: "linear-gradient(90deg, rgba(79,124,255,0.10), transparent)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 160, background: "linear-gradient(90deg, rgba(8,189,128,0.08), transparent)", pointerEvents: "none" }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
           <div style={{ width: 46, height: 46, borderRadius: 13, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -189,11 +201,11 @@ export default function DashboardPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 20, position: "relative" }}>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 2 }}>Present Today</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", letterSpacing: "-1.5px", lineHeight: 1 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "#fff", letterSpacing: "-1.5px", lineHeight: 1 }}>
               {loading ? "—" : allPresentIds.size}
               <span style={{ fontSize: 14, fontWeight: 500, color: "rgba(255,255,255,0.30)", marginLeft: 4 }}>/ {students.length}</span>
             </div>
-            <div style={{ fontSize: 11, color: attPct >= 75 ? "#4ADE80" : attPct >= 50 ? "#FCD34D" : "#F87171", fontWeight: 600, marginTop: 3 }}>
+            <div style={{ fontSize: 11, color: attPct >= 75 ? "#4ADE80" : attPct >= 50 ? "#FCD34D" : "#FBBF24", fontWeight: 600, marginTop: 3 }}>
               {attPct}% attendance rate
             </div>
           </div>
@@ -204,12 +216,26 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ── Center filter ─────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.8, marginRight: 4 }}>Center</span>
+        {CENTERS.map(c => (
+          <button key={c} onClick={() => setCenter(c)} style={{
+            padding: "5px 14px", borderRadius: 100, border: "1px solid",
+            borderColor: center === c ? "var(--admin-accent)" : "var(--admin-card-border)",
+            background: center === c ? "var(--admin-accent)" : "var(--admin-input-bg)",
+            color: center === c ? "#fff" : "var(--admin-text-muted)",
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{c}</button>
+        ))}
+      </div>
+
       {/* ── Stat Cards ────────────────────────────────────────────────────── */}
       <div className="stat-grid">
         {([
           {
             label: "Total Students",
-            color: "#1D6BF3",
+            color: "#0EA5E9",
             value: loading ? "—" : students.length,
             sub: `${batches.length} batch${batches.length !== 1 ? "es" : ""}`,
             progress: 100,
@@ -218,7 +244,7 @@ export default function DashboardPage() {
           },
           {
             label: "Present Today",
-            color: attPct >= 75 ? "#16A34A" : attPct >= 50 ? "#D97706" : "#DC2626",
+            color: "#08BD80",
             value: loading ? "—" : `${attPct}%`,
             sub: `${allPresentIds.size} of ${students.length} students`,
             progress: attPct,
@@ -227,7 +253,7 @@ export default function DashboardPage() {
           },
           {
             label: "Need Attention",
-            color: atRiskBatches.length > 0 ? "#DC2626" : "#16A34A",
+            color: atRiskBatches.length > 0 ? "#F59E0B" : "#08BD80",
             value: loading ? "—" : atRiskBatches.length,
             sub: atRiskBatches.length > 0 ? `batch${atRiskBatches.length !== 1 ? "es" : ""} below 75%` : "All batches on track",
             progress: batches.length > 0 ? Math.round((batches.length - atRiskBatches.length) / batches.length * 100) : 100,
@@ -236,7 +262,7 @@ export default function DashboardPage() {
           },
           {
             label: "Tests Uploaded",
-            color: "#7C3AED",
+            color: "#8B5CF6",
             value: loading ? "—" : tests.length,
             sub: tests.length > 0 ? `Latest: ${tests[0]?.testName}` : "No tests yet",
             progress: Math.min(tests.length * 10, 100),
@@ -258,7 +284,7 @@ export default function DashboardPage() {
               </div>
             </div>
             {/* Value in foreground color — not the accent color */}
-            <div style={{ fontSize: 32, fontWeight: 800, color: "var(--admin-text)", letterSpacing: "-1.5px", lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: 32, fontWeight: 700, color: "var(--admin-text)", letterSpacing: "-1.5px", lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 5, marginBottom: 12 }}>{s.sub}</div>
             {/* Progress bar at bottom like AI Caller */}
             <div style={{ height: 3, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden" }}>
@@ -282,7 +308,7 @@ export default function DashboardPage() {
                 <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 2 }}>Average attendance % · last 30 days</div>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
-                {[{ label: "≥75%", color: "#16A34A" }, { label: "50–75%", color: "#D97706" }, { label: "<50%", color: "#DC2626" }].map(l => (
+                {[{ label: "≥75%", color: "#08BD80" }, { label: "50–75%", color: "#F59E0B" }, { label: "<50%", color: "#FB923C" }].map(l => (
                   <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--admin-text-faint)" }}>
                     <div style={{ width: 7, height: 7, borderRadius: 2, background: l.color }} />
                     {l.label}
@@ -319,11 +345,11 @@ export default function DashboardPage() {
 
           {/* At-risk batches */}
           {atRiskBatches.length > 0 && (
-            <div style={{ ...card, padding: 22, borderColor: "rgba(220,38,38,0.16)" }}>
+            <div style={{ ...card, padding: 22, borderColor: "rgba(245,158,11,0.22)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#DC2626", flexShrink: 0 }} />
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#F59E0B", flexShrink: 0 }} />
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Needs Attention</div>
-                <span style={{ marginLeft: "auto", fontSize: 10, color: "#DC2626", background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 100, padding: "2px 8px", fontWeight: 700 }}>
+                <span style={{ marginLeft: "auto", fontSize: 10, color: "#F59E0B", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "2px 8px", fontWeight: 700 }}>
                   {atRiskBatches.length} below 75%
                 </span>
               </div>
@@ -344,7 +370,7 @@ export default function DashboardPage() {
                       <div style={{ fontSize: 11, color: "var(--admin-text-faint)" }}>{b.totalStudents} students</div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, color: attColor(b.avgAttendancePct), letterSpacing: "-0.5px" }}>{b.avgAttendancePct}%</div>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: attColor(b.avgAttendancePct), letterSpacing: "-0.5px" }}>{b.avgAttendancePct}%</div>
                       <div style={{ fontSize: 10, color: "var(--admin-text-faint)" }}>avg att.</div>
                     </div>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={attColor(b.avgAttendancePct)} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5, flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
@@ -457,9 +483,9 @@ export default function DashboardPage() {
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", marginBottom: 12 }}>Quick Actions</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {[
-                { label: "View All Students", href: "/admin/students", color: "#1D6BF3" },
-                { label: "Mark Attendance", href: "/admin/attendance", color: "#16A34A" },
-                { label: "Upload Test Results", href: "/admin/results", color: "#7C3AED" },
+                { label: "View All Students", href: "/admin/students", color: "#0EA5E9" },
+                { label: "Mark Attendance", href: "/admin/attendance", color: "#08BD80" },
+                { label: "Upload Test Results", href: "/admin/results", color: "#8B5CF6" },
                 { label: "Generate QR Codes", href: "/admin/qr-codes", color: "#0891B2" },
               ].map(a => (
                 <button
@@ -515,10 +541,10 @@ export default function DashboardPage() {
               ) : summaries.map(s => {
                 const status = s.punchIn && s.punchOut ? "Complete" : s.punchIn ? "In Progress" : "Absent";
                 const sc = {
-                  Complete: { color: "#059669", bg: "rgba(5,150,105,0.08)", label: "✓ Complete" },
-                  "In Progress": { color: "#D97706", bg: "rgba(217,119,6,0.08)", label: "● In Progress" },
-                  Absent: { color: "#DC2626", bg: "rgba(220,38,38,0.08)", label: "○ Absent" },
-                }[status] ?? { color: "#DC2626", bg: "rgba(220,38,38,0.08)", label: "Absent" };
+                  Complete: { color: "#08BD80", bg: "rgba(8,189,128,0.08)", label: "✓ Complete" },
+                  "In Progress": { color: "#F59E0B", bg: "rgba(245,158,11,0.08)", label: "● In Progress" },
+                  Absent: { color: "#FB923C", bg: "rgba(251,146,60,0.08)", label: "○ Absent" },
+                }[status] ?? { color: "#FB923C", bg: "rgba(251,146,60,0.08)", label: "Absent" };
                 return (
                   <tr key={s.student.id} style={{ borderTop: "1px solid var(--admin-card-border)", transition: "background 0.1s" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--admin-input-bg)")}
@@ -529,7 +555,7 @@ export default function DashboardPage() {
                     <td style={{ padding: "11px 18px" }}>
                       <span style={{ background: batchColor(s.student.batch, batchNames.slice(1)), color: "#fff", borderRadius: 100, padding: "3px 10px", fontSize: 10, fontWeight: 700, display: "inline-block" }}>{s.student.batch || "—"}</span>
                     </td>
-                    <td style={{ padding: "11px 18px", color: s.punchIn ? "#16A34A" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400 }}>{s.punchIn ?? "—"}</td>
+                    <td style={{ padding: "11px 18px", color: s.punchIn ? "#08BD80" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400 }}>{s.punchIn ?? "—"}</td>
                     <td style={{ padding: "11px 18px", color: s.punchOut ? "#3B82F6" : "var(--admin-text-faint)", fontWeight: s.punchOut ? 600 : 400 }}>{s.punchOut ?? "—"}</td>
                     <td style={{ padding: "11px 18px" }}>
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: 100, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>{sc.label}</span>

@@ -76,10 +76,14 @@ export async function uploadResults(req: Request, res: Response): Promise<void> 
   res.status(201).json({ message: `${results.length} results uploaded.` });
 }
 
+function str(v: unknown): string | undefined { return typeof v === "string" ? v : undefined; }
+
 // Admin: list all tests uploaded
 export async function listTests(req: Request, res: Response): Promise<void> {
+  const center = str(req.query["center"]);
   const tests = await prisma.testResult.groupBy({
     by: ["testName", "testDate"],
+    where: center ? { student: { center } } : {},
     _count: { id: true },
     orderBy: { testDate: "desc" },
   });
@@ -89,10 +93,15 @@ export async function listTests(req: Request, res: Response): Promise<void> {
 // Admin: get all results for a specific test
 export async function getTestResults(req: Request, res: Response): Promise<void> {
   const testName = decodeURIComponent(req.params["testName"] as string);
-  const testDate = req.query["date"] as string;
+  const testDate = str(req.query["date"]);
+  const center = str(req.query["center"]);
   const results = await prisma.testResult.findMany({
-    where: { testName, ...(testDate ? { testDate } : {}) },
-    include: { student: { select: { name: true, enrollmentNo: true, batch: true } } },
+    where: {
+      testName,
+      ...(testDate ? { testDate } : {}),
+      ...(center ? { student: { center } } : {}),
+    },
+    include: { student: { select: { name: true, enrollmentNo: true, batch: true, center: true } } },
     orderBy: { rank: "asc" },
   });
   res.json(results);
@@ -100,7 +109,7 @@ export async function getTestResults(req: Request, res: Response): Promise<void>
 
 // Parent/mobile: get results for a specific student (with class averages per subject)
 export async function getStudentResults(req: Request, res: Response): Promise<void> {
-  const { studentId } = req.params;
+  const studentId = req.params["studentId"] as string;
   const results = await prisma.testResult.findMany({
     where: { studentId },
     orderBy: { testDate: "desc" },

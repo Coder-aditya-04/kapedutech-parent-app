@@ -232,6 +232,8 @@ function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void })
   );
 }
 
+const CENTERS = ["All", "College Road", "Nashik Road"];
+
 function ResultsPageInner() {
   const searchParams = useSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
@@ -240,6 +242,7 @@ function ResultsPageInner() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [tab, setTab] = useState<"paste" | "csv">("paste");
   const [selectedTest, setSelectedTest] = useState<TestMeta | null>(null);
+  const [center, setCenter] = useState("All");
 
   const [testName, setTestName] = useState("");
   const [testDate, setTestDate] = useState(new Date().toISOString().slice(0, 10));
@@ -255,11 +258,15 @@ function ResultsPageInner() {
   const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
-    const [sRes, tRes] = await Promise.all([fetch("/api/admin/students"), fetch("/api/admin/results/tests")]);
+    const cp = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
+    const [sRes, tRes] = await Promise.all([
+      fetch(`/api/admin/students${cp}`),
+      fetch(`/api/admin/results/tests${cp}`),
+    ]);
     if (sRes.ok) setStudents(await sRes.json());
     if (tRes.ok) setTests(await tRes.json());
     setLoading(false);
-  }, []);
+  }, [center]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -492,7 +499,18 @@ function ResultsPageInner() {
 
         {/* Tests list */}
         <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: 24 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>Uploaded Tests</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 12px" }}>Uploaded Tests</h2>
+          <div style={{ display: "flex", gap: 5, marginBottom: 16, flexWrap: "wrap" }}>
+            {CENTERS.map(c => (
+              <button key={c} onClick={() => setCenter(c)} style={{
+                padding: "4px 12px", borderRadius: 100, border: "1px solid",
+                borderColor: center === c ? "var(--admin-accent)" : "var(--admin-card-border)",
+                background: center === c ? "var(--admin-accent)" : "var(--admin-input-bg)",
+                color: center === c ? "#fff" : "var(--admin-text-muted)",
+                fontSize: 11, fontWeight: 600, cursor: "pointer",
+              }}>{c}</button>
+            ))}
+          </div>
           {loading ? (
             <p style={{ color: "var(--admin-text-faint)", fontSize: 14 }}>Loading...</p>
           ) : tests.length === 0 ? (

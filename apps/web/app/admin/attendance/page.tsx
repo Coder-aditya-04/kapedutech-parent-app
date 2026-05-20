@@ -5,6 +5,7 @@ type Student = { id: string; name: string; enrollmentNo: string; batch: string }
 type AttendanceRecord = { id: string; studentId: string; date: string; type: "PUNCH_IN" | "PUNCH_OUT"; markedAt: string; student: Student };
 type Summary = { student: Student; punchIn: string | null; punchOut: string | null; punchInMs: number | null; punchOutMs: number | null };
 
+const CENTERS = ["All", "College Road", "Nashik Road"];
 const BATCH_COLORS = ["#0064E0", "#6441D2", "#059669", "#D97706", "#0891B2", "#DC2626"];
 function batchColor(batchName: string, allBatches: string[]) {
   const idx = allBatches.indexOf(batchName);
@@ -33,12 +34,22 @@ function exportCSV(summaries: Summary[], date: string) {
   URL.revokeObjectURL(url);
 }
 
+const chip = (active: boolean): React.CSSProperties => ({
+  padding: "6px 14px", borderRadius: 100, border: "1px solid",
+  borderColor: active ? "var(--admin-accent)" : "var(--admin-card-border)",
+  background: active ? "var(--admin-accent)" : "var(--admin-input-bg)",
+  color: active ? "#fff" : "var(--admin-text-muted)",
+  fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+});
+
 export default function AttendancePage() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [batch, setBatch] = useState("All");
   const [batches, setBatches] = useState<string[]>(["All"]);
+  const [center, setCenter] = useState("All");
+  const [search, setSearch] = useState("");
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
 
@@ -51,15 +62,32 @@ export default function AttendancePage() {
 
   const load = useCallback(async () => {
     try {
-      const url = date === today
-        ? (batch === "All" ? "/api/admin/attendance/today" : `/api/admin/attendance/batch?batch=${batch}`)
-        : `/api/admin/attendance/date?date=${date}${batch !== "All" ? `&batch=${batch}` : ""}`;
-      const [recRes, stuRes] = await Promise.all([fetch(url), fetch("/api/admin/students")]);
+      const centerParam = center !== "All" ? center : "";
+      const batchParam = batch !== "All" ? batch : "";
+
+      let url: string;
+      if (date === today) {
+        const params = new URLSearchParams();
+        if (batchParam) params.set("batch", batchParam);
+        if (centerParam) params.set("center", centerParam);
+        const qs = params.toString();
+        url = batchParam
+          ? `/api/admin/attendance/batch${qs ? `?${qs}` : ""}`
+          : `/api/admin/attendance/today${qs ? `?${qs}` : ""}`;
+      } else {
+        const params = new URLSearchParams({ date });
+        if (batchParam) params.set("batch", batchParam);
+        if (centerParam) params.set("center", centerParam);
+        url = `/api/admin/attendance/date?${params.toString()}`;
+      }
+
+      const stuUrl = centerParam ? `/api/admin/students?center=${encodeURIComponent(centerParam)}` : "/api/admin/students";
+      const [recRes, stuRes] = await Promise.all([fetch(url), fetch(stuUrl)]);
       setRecords(recRes.ok ? await recRes.json() : []);
       setAllStudents(stuRes.ok ? await stuRes.json() : []);
     } catch {}
     setLoading(false);
-  }, [batch, date, today]);
+  }, [batch, center, date, today]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
 
@@ -80,8 +108,15 @@ export default function AttendancePage() {
     }
   });
 
-  const summaries = Array.from(summaryMap.values());
-  const presentCount = summaries.filter(s => s.punchIn !== null).length;
+  const allSummaries = Array.from(summaryMap.values());
+  const summaries = search.trim()
+    ? allSummaries.filter(s =>
+        s.student.name.toLowerCase().includes(search.toLowerCase()) ||
+        s.student.enrollmentNo.toLowerCase().includes(search.toLowerCase())
+      )
+    : allSummaries;
+
+  const presentCount = allSummaries.filter(s => s.punchIn !== null).length;
   const totalCount = batchFiltered.length;
   const absentCount = Math.max(0, totalCount - presentCount);
 
@@ -96,7 +131,7 @@ export default function AttendancePage() {
   return (
     <div className="admin-page">
       {/* Header */}
-      <div className="page-header" style={{ marginBottom: 24 }}>
+      <div className="page-header" style={{ marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: -0.3 }}>Attendance</h1>
           <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>{displayDate}</p>
@@ -117,24 +152,36 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Stats + Batch filter */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Stat cards */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         {statCards.map(s => (
           <div key={s.label} style={{ background: s.bg, borderRadius: 14, padding: "14px 22px", display: "flex", alignItems: "center", gap: 12, border: `1px solid ${s.border}` }}>
             <span style={{ fontSize: 26, fontWeight: 800, color: s.color }}>{loading ? "—" : s.value}</span>
             <span style={{ fontSize: 13, color: s.color, fontWeight: 600 }}>{s.label}</span>
           </div>
         ))}
-        {/* Scrollable batch tabs */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
-          {batches.map(b => (
-            <button key={b} onClick={() => setBatch(b)} style={{
-              padding: "6px 14px", borderRadius: 100, border: "none", whiteSpace: "nowrap", flexShrink: 0,
-              background: batch === b ? "var(--admin-accent)" : "var(--admin-input-bg)",
-              color: batch === b ? "#fff" : "var(--admin-text-muted)",
-              fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-            }}>{b}</button>
+      </div>
+
+      {/* Center filter + Batch filter + Search */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        {/* Center chips */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {CENTERS.map(c => (
+            <button key={c} onClick={() => setCenter(c)} style={chip(center === c)}>{c}</button>
           ))}
+        </div>
+        <div style={{ width: 1, height: 24, background: "var(--admin-card-border)", flexShrink: 0 }} />
+        {/* Batch chips */}
+        <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", flex: 1, minWidth: 0 }}>
+          {batches.map(b => (
+            <button key={b} onClick={() => setBatch(b)} style={{ ...chip(batch === b), flexShrink: 0 }}>{b}</button>
+          ))}
+        </div>
+        {/* Search */}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <svg style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input placeholder="Search student..." value={search} onChange={e => setSearch(e.target.value)}
+            style={{ padding: "7px 12px 7px 32px", border: "1px solid var(--admin-input-border)", borderRadius: 100, fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-input-bg)", width: 180 }} />
         </div>
       </div>
 

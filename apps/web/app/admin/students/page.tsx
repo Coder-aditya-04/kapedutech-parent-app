@@ -1,14 +1,16 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 
-type Student = { id: string; name: string; enrollmentNo: string; batch: string; parent: { phone: string; name: string; email?: string | null } };
+type Student = { id: string; name: string; enrollmentNo: string; batch: string; center: string; parent: { phone: string; name: string; email?: string | null } };
 type Batch = { id: string; name: string };
-type ImportRow = { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string; parentEmail: string };
+type ImportRow = { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string; parentEmail: string; center?: string };
+
+const CENTERS = ["All", "College Road", "Nashik Road"];
 
 function exportCSV(students: Student[]) {
   const rows = [
-    ["Name", "Enrollment No", "Batch", "Parent Name", "Parent Phone", "Parent Email"],
-    ...students.map(s => [s.name, s.enrollmentNo, s.batch || "", s.parent?.name || "", s.parent?.phone || "", s.parent?.email || ""]),
+    ["Name", "Enrollment No", "Batch", "Center", "Parent Name", "Parent Phone", "Parent Email"],
+    ...students.map(s => [s.name, s.enrollmentNo, s.batch || "", s.center || "", s.parent?.name || "", s.parent?.phone || "", s.parent?.email || ""]),
   ];
   const csv = rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -31,11 +33,16 @@ function parseImportCSV(text: string): ImportRow[] {
       parentName: get(["parentname", "parent", "fathername"]),
       parentPhone: get(["parentphone", "phone", "mobile", "contact"]),
       parentEmail: get(["parentemail", "email", "mail"]),
+      center: get(["center", "branch", "location"]) || undefined,
     };
   }).filter(r => r.name && r.parentPhone);
 }
 
 const BATCH_COLORS: Record<number, string> = { 0: "#0064E0", 1: "#6441D2", 2: "#059669", 3: "#D97706", 4: "#DC2626", 5: "#0891B2" };
+const CENTER_COLORS: Record<string, { bg: string; color: string }> = {
+  "College Road": { bg: "rgba(79,70,229,0.1)", color: "#4F46E5" },
+  "Nashik Road":  { bg: "rgba(5,150,105,0.1)", color: "#059669" },
+};
 
 const S = {
   card: { background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" },
@@ -50,6 +57,13 @@ const S = {
   faint: { color: "var(--admin-text-faint)" },
   row: { borderTop: "1px solid var(--admin-card-border)" },
   optionalBadge: { fontSize: 10, fontWeight: 600, color: "var(--admin-text-faint)", background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 6, padding: "1px 6px", marginLeft: 6, verticalAlign: "middle" as const },
+  chip: (active: boolean): React.CSSProperties => ({
+    padding: "6px 14px", borderRadius: 100, border: "1px solid",
+    borderColor: active ? "var(--admin-accent)" : "var(--admin-card-border)",
+    background: active ? "var(--admin-accent)" : "var(--admin-input-bg)",
+    color: active ? "#fff" : "var(--admin-text-muted)",
+    fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const,
+  }),
 } as const;
 
 function FormFields({ values, onChange }: { values: Record<string, string>; onChange: (k: string, v: string) => void }) {
@@ -81,12 +95,13 @@ export default function StudentsPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [center, setCenter] = useState("All");
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: "", enrollmentNo: "", batch: "", parentName: "", parentPhone: "", parentEmail: "" });
+  const [form, setForm] = useState({ name: "", enrollmentNo: "", batch: "", center: "College Road", parentName: "", parentPhone: "", parentEmail: "" });
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", enrollmentNo: "", batch: "", parentName: "", parentPhone: "", parentEmail: "" });
+  const [editForm, setEditForm] = useState({ name: "", enrollmentNo: "", batch: "", center: "College Road", parentName: "", parentPhone: "", parentEmail: "" });
   const [deleteStudent, setDeleteStudent] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -96,8 +111,11 @@ export default function StudentsPage() {
 
   const load = useCallback(async (q?: string) => {
     try {
+      const cp = center !== "All" ? `center=${encodeURIComponent(center)}` : "";
       const [sRes, bRes] = await Promise.all([
-        fetch(q ? `/api/admin/students/search?q=${encodeURIComponent(q)}` : "/api/admin/students"),
+        fetch(q
+          ? `/api/admin/students/search?q=${encodeURIComponent(q)}${cp ? `&${cp}` : ""}`
+          : `/api/admin/students${cp ? `?${cp}` : ""}`),
         fetch("/api/admin/batches"),
       ]);
       const s = sRes.ok ? await sRes.json() : [];
@@ -107,7 +125,7 @@ export default function StudentsPage() {
       setForm(f => ({ ...f, batch: f.batch || b[0]?.name || "" }));
     } catch {}
     setLoading(false);
-  }, []);
+  }, [center]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setTimeout(() => load(search || undefined), 300); return () => clearTimeout(t); }, [search, load]);
@@ -125,7 +143,7 @@ export default function StudentsPage() {
       if (res.ok) {
         showToast("Student added!", true);
         setShowModal(false);
-        setForm({ name: "", enrollmentNo: "", batch: batches[0]?.name || "", parentName: "", parentPhone: "", parentEmail: "" });
+        setForm({ name: "", enrollmentNo: "", batch: batches[0]?.name || "", center: "College Road", parentName: "", parentPhone: "", parentEmail: "" });
         load();
       } else { showToast((await res.json()).message ?? "Failed", false); }
     } catch { showToast("Network error", false); }
@@ -134,7 +152,7 @@ export default function StudentsPage() {
 
   function openEdit(s: Student) {
     setEditStudent(s);
-    setEditForm({ name: s.name, enrollmentNo: s.enrollmentNo, batch: s.batch || batches[0]?.name || "", parentName: s.parent?.name ?? "", parentPhone: s.parent?.phone ?? "", parentEmail: s.parent?.email ?? "" });
+    setEditForm({ name: s.name, enrollmentNo: s.enrollmentNo, batch: s.batch || batches[0]?.name || "", center: s.center || "College Road", parentName: s.parent?.name ?? "", parentPhone: s.parent?.phone ?? "", parentEmail: s.parent?.email ?? "" });
   }
 
   async function handleEditSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -181,7 +199,8 @@ export default function StudentsPage() {
     setImporting(true);
     try {
       const res = await fetch("/api/admin/students/import", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: importRows }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: importRows, center: center !== "All" ? center : undefined }),
       });
       const d = await res.json();
       if (res.ok) {
@@ -197,6 +216,8 @@ export default function StudentsPage() {
     return BATCH_COLORS[i % 6] ?? "#6B7280";
   };
 
+  const centerStyle = (c: string) => CENTER_COLORS[c] ?? { bg: "rgba(107,114,128,0.1)", color: "#6B7280" };
+
   return (
     <div className="admin-page">
       {toast && (
@@ -206,10 +227,10 @@ export default function StudentsPage() {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Students</h1>
-          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14, margin: "4px 0 0" }}>{loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""} enrolled`}</p>
+          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14, margin: "4px 0 0" }}>{loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""}${center !== "All" ? ` · ${center}` : ""}`}</p>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button onClick={() => exportCSV(students)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "1px solid var(--admin-card-border)", borderRadius: 100, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
@@ -227,11 +248,18 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div style={{ position: "relative", marginBottom: 20 }}>
-        <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input placeholder="Search by name or enrollment no..." value={search} onChange={e => setSearch(e.target.value)}
-          style={{ ...S.inp, paddingLeft: 40, borderRadius: 8 }} />
+      {/* Center filter + Search */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {CENTERS.map(c => (
+            <button key={c} onClick={() => setCenter(c)} style={S.chip(center === c)}>{c}</button>
+          ))}
+        </div>
+        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+          <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input placeholder="Search by name or enrollment no..." value={search} onChange={e => setSearch(e.target.value)}
+            style={{ ...S.inp, paddingLeft: 38, borderRadius: 100 }} />
+        </div>
       </div>
 
       {/* Table */}
@@ -240,43 +268,49 @@ export default function StudentsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
-                {["Name", "Enrollment No", "Batch", "Parent Name", "Parent Phone", "Parent Email", "Actions"].map(h => (
+                {["Name", "Enrollment No", "Batch", "Center", "Parent Name", "Parent Phone", "Parent Email", "Actions"].map(h => (
                   <th key={h} style={S.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading...</td></tr>
+                <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading...</td></tr>
               ) : students.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No students found</td></tr>
-              ) : students.map(s => (
-                <tr key={s.id} style={S.row}>
-                  <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
-                  <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
-                  <td style={S.td}>
-                    <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 100, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5, display: "inline-block" }}>{s.batch || "—"}</span>
-                  </td>
-                  <td style={{ ...S.td, color: "var(--admin-text-muted)" }}>{s.parent?.name ?? "—"}</td>
-                  <td style={{ ...S.td, color: "var(--admin-accent)", fontSize: 13, fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
-                  <td style={{ ...S.td, color: "var(--admin-text-muted)", fontSize: 12 }}>
-                    {s.parent?.email
-                      ? <span style={{ color: "var(--admin-accent)" }}>{s.parent.email}</span>
-                      : <span style={{ color: "var(--admin-text-faint)", fontStyle: "italic" }}>not set</span>
-                    }
-                  </td>
-                  <td style={S.td}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => openEdit(s)} style={{ width: 30, height: 30, border: "1px solid var(--admin-card-border)", borderRadius: 8, background: "var(--admin-card-bg)", color: "#4F46E5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </button>
-                      <button onClick={() => setDeleteStudent(s)} style={{ width: 30, height: 30, border: "1px solid #FCA5A5", borderRadius: 8, background: "#FFF5F5", color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No students found</td></tr>
+              ) : students.map(s => {
+                const cs = centerStyle(s.center);
+                return (
+                  <tr key={s.id} style={S.row}>
+                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
+                    <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
+                    <td style={S.td}>
+                      <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 100, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5, display: "inline-block" }}>{s.batch || "—"}</span>
+                    </td>
+                    <td style={S.td}>
+                      <span style={{ background: cs.bg, color: cs.color, borderRadius: 100, padding: "4px 10px", fontSize: 11, fontWeight: 600, display: "inline-block" }}>{s.center || "—"}</span>
+                    </td>
+                    <td style={{ ...S.td, color: "var(--admin-text-muted)" }}>{s.parent?.name ?? "—"}</td>
+                    <td style={{ ...S.td, color: "var(--admin-accent)", fontSize: 13, fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
+                    <td style={{ ...S.td, color: "var(--admin-text-muted)", fontSize: 12 }}>
+                      {s.parent?.email
+                        ? <span style={{ color: "var(--admin-accent)" }}>{s.parent.email}</span>
+                        : <span style={{ color: "var(--admin-text-faint)", fontStyle: "italic" }}>not set</span>
+                      }
+                    </td>
+                    <td style={S.td}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => openEdit(s)} style={{ width: 30, height: 30, border: "1px solid var(--admin-card-border)", borderRadius: 8, background: "var(--admin-card-bg)", color: "#4F46E5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button onClick={() => setDeleteStudent(s)} style={{ width: 30, height: 30, border: "1px solid #FCA5A5", borderRadius: 8, background: "#FFF5F5", color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -285,19 +319,28 @@ export default function StudentsPage() {
       {/* Add Modal */}
       {showModal && (
         <div style={S.overlay}>
-          <div style={S.modal}>
+          <div style={{ ...S.modal, maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Add New Student</h2>
               <button onClick={() => setShowModal(false)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
             </div>
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <FormFields values={form} onChange={(k, v) => setForm(p => ({ ...p, [k]: v }))} />
-              <div>
-                <label style={S.label}>Batch</label>
-                <select value={form.batch} onChange={e => setForm(p => ({ ...p, batch: e.target.value }))} style={S.inp}>
-                  {batches.length === 0 && <option value="">No batches — create one first</option>}
-                  {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                </select>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div>
+                  <label style={S.label}>Batch</label>
+                  <select value={form.batch} onChange={e => setForm(p => ({ ...p, batch: e.target.value }))} style={S.inp}>
+                    {batches.length === 0 && <option value="">No batches — create one first</option>}
+                    {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Center</label>
+                  <select value={form.center} onChange={e => setForm(p => ({ ...p, center: e.target.value }))} style={S.inp}>
+                    <option value="College Road">College Road</option>
+                    <option value="Nashik Road">Nashik Road</option>
+                  </select>
+                </div>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
                 <button type="button" onClick={() => setShowModal(false)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
@@ -313,18 +356,27 @@ export default function StudentsPage() {
       {/* Edit Modal */}
       {editStudent && (
         <div style={S.overlay}>
-          <div style={S.modal}>
+          <div style={{ ...S.modal, maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Edit Student</h2>
               <button onClick={() => setEditStudent(null)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
             </div>
             <form onSubmit={handleEditSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <FormFields values={editForm} onChange={(k, v) => setEditForm(p => ({ ...p, [k]: v }))} />
-              <div>
-                <label style={S.label}>Batch</label>
-                <select value={editForm.batch} onChange={e => setEditForm(p => ({ ...p, batch: e.target.value }))} style={S.inp}>
-                  {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                </select>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div>
+                  <label style={S.label}>Batch</label>
+                  <select value={editForm.batch} onChange={e => setEditForm(p => ({ ...p, batch: e.target.value }))} style={S.inp}>
+                    {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Center</label>
+                  <select value={editForm.center} onChange={e => setEditForm(p => ({ ...p, center: e.target.value }))} style={S.inp}>
+                    <option value="College Road">College Road</option>
+                    <option value="Nashik Road">Nashik Road</option>
+                  </select>
+                </div>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
                 <button type="button" onClick={() => setEditStudent(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
@@ -347,7 +399,7 @@ export default function StudentsPage() {
             </div>
             <div style={{ background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--admin-text-muted)" }}>
               Required columns: <strong style={{ color: "var(--admin-text)" }}>Name, EnrollmentNo, Batch, ParentName, ParentPhone</strong><br />
-              Optional: <strong style={{ color: "var(--admin-text)" }}>ParentEmail</strong> — add to enable email OTP login for that parent
+              Optional: <strong style={{ color: "var(--admin-text)" }}>ParentEmail, Center</strong>
             </div>
             <input type="file" accept=".csv" onChange={handleImportFile}
               style={{ width: "100%", padding: "10px 12px", border: "1.5px solid var(--admin-input-border)", borderRadius: 10, fontSize: 14, boxSizing: "border-box", background: "var(--admin-input-bg)", color: "var(--admin-text)", marginBottom: 14 }} />
@@ -356,7 +408,7 @@ export default function StudentsPage() {
                 <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{importRows.length} students to import:</p>
                 {importRows.slice(0, 8).map((r, i) => (
                   <p key={i} style={{ margin: "2px 0", fontSize: 12, color: "var(--admin-text-muted)" }}>
-                    {r.name} · {r.batch} · {r.parentPhone}{r.parentEmail ? ` · ${r.parentEmail}` : ""}
+                    {r.name} · {r.batch} · {r.center || (center !== "All" ? center : "College Road")} · {r.parentPhone}
                   </p>
                 ))}
                 {importRows.length > 8 && <p style={{ fontSize: 12, color: "var(--admin-text-faint)", margin: "4px 0 0" }}>...and {importRows.length - 8} more</p>}

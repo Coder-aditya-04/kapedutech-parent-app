@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 
-export async function listBatches(req: Request, res: Response): Promise<void> {
+function str(v: unknown): string | undefined { return typeof v === "string" ? v : undefined; }
+
+export async function listBatches(_req: Request, res: Response): Promise<void> {
   const batches = await prisma.batch.findMany({ orderBy: { createdAt: "asc" } });
   res.json(batches);
 }
@@ -16,7 +18,7 @@ export async function createBatch(req: Request, res: Response): Promise<void> {
 }
 
 export async function deleteBatch(req: Request, res: Response): Promise<void> {
-  const { id } = req.params;
+  const id = req.params["id"] as string;
   const count = await prisma.student.count({ where: { batch: (await prisma.batch.findUnique({ where: { id } }))?.name ?? "" } });
   if (count > 0) { res.status(400).json({ message: `Cannot delete — ${count} student(s) are in this batch.` }); return; }
   await prisma.batch.delete({ where: { id } });
@@ -72,6 +74,7 @@ export async function batchDetail(req: Request, res: Response): Promise<void> {
 }
 
 export async function batchAnalytics(req: Request, res: Response): Promise<void> {
+  const center = str(req.query["center"]);
   const batches = await prisma.batch.findMany({ orderBy: { createdAt: "asc" } });
   const today = new Date();
   const thirtyDaysAgo = new Date(today);
@@ -80,7 +83,7 @@ export async function batchAnalytics(req: Request, res: Response): Promise<void>
   const endDate = today.toISOString().slice(0, 10);
 
   const analytics = await Promise.all(batches.map(async (batch) => {
-    const students = await prisma.student.findMany({ where: { batch: batch.name }, select: { id: true } });
+    const students = await prisma.student.findMany({ where: { batch: batch.name, ...(center ? { center } : {}) }, select: { id: true } });
     const studentIds = students.map(s => s.id);
     const totalStudents = studentIds.length;
 
