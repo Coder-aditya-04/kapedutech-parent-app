@@ -33,8 +33,11 @@ model Student {
 
 model Batch {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String
+  center    String   @default("College Road")
   createdAt DateTime @default(now())
+
+  @@unique([name, center])
 }
 
 model TestResult {

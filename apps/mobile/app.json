@@ -21,7 +21,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.kapconnect.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 30
+      "versionCode": 34
     },
     "web": {
       "output": "static",

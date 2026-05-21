@@ -3,17 +3,22 @@ import { prisma } from "../lib/prisma.js";
 
 function str(v: unknown): string | undefined { return typeof v === "string" ? v : undefined; }
 
-export async function listBatches(_req: Request, res: Response): Promise<void> {
-  const batches = await prisma.batch.findMany({ orderBy: { createdAt: "asc" } });
+export async function listBatches(req: Request, res: Response): Promise<void> {
+  const center = str(req.query["center"]);
+  const batches = await prisma.batch.findMany({
+    where: center ? { center } : {},
+    orderBy: { createdAt: "asc" },
+  });
   res.json(batches);
 }
 
 export async function createBatch(req: Request, res: Response): Promise<void> {
-  const { name } = req.body as { name?: string };
+  const { name, center } = req.body as { name?: string; center?: string };
   if (!name?.trim()) { res.status(400).json({ message: "Batch name is required." }); return; }
-  const existing = await prisma.batch.findFirst({ where: { name: name.trim() } });
-  if (existing) { res.status(409).json({ message: "Batch already exists." }); return; }
-  const batch = await prisma.batch.create({ data: { name: name.trim() } });
+  if (!center?.trim()) { res.status(400).json({ message: "Center is required." }); return; }
+  const existing = await prisma.batch.findFirst({ where: { name: name.trim(), center: center.trim() } });
+  if (existing) { res.status(409).json({ message: "Batch already exists for this center." }); return; }
+  const batch = await prisma.batch.create({ data: { name: name.trim(), center: center.trim() } });
   res.status(201).json(batch);
 }
 
@@ -75,7 +80,10 @@ export async function batchDetail(req: Request, res: Response): Promise<void> {
 
 export async function batchAnalytics(req: Request, res: Response): Promise<void> {
   const center = str(req.query["center"]);
-  const batches = await prisma.batch.findMany({ orderBy: { createdAt: "asc" } });
+  const batches = await prisma.batch.findMany({
+    where: center ? { center } : {},
+    orderBy: { createdAt: "asc" },
+  });
   const today = new Date();
   const thirtyDaysAgo = new Date(today);
   thirtyDaysAgo.setDate(today.getDate() - 30);

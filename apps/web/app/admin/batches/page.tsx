@@ -3,8 +3,10 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-type Batch = { id: string; name: string; createdAt: string };
+type Batch = { id: string; name: string; center: string; createdAt: string };
 type Analytics = Batch & { totalStudents: number; avgAttendancePct: number; totalWorkingDays?: number };
+
+const CENTERS = ["College Road", "Nashik Road"];
 type StudentDetail = {
   id: string; name: string; enrollmentNo: string;
   attendancePct: number; presentDays: number; totalWorkingDays: number;
@@ -13,8 +15,8 @@ type StudentDetail = {
 };
 type BatchDetail = { batchName: string; totalStudents: number; totalWorkingDays: number; students: StudentDetail[] };
 
-const PALETTE = ["#1D6BF3","#7C3AED","#0D9488","#B45309","#0891B2","#BE185D","#16A34A","#DC2626"];
-function attColor(p: number) { return p >= 75 ? "#16A34A" : p >= 50 ? "#D97706" : "#DC2626"; }
+const PALETTE = ["#6366F1","#0D9488","#F59E0B","#0891B2","#8B5CF6","#BE185D","#08BD80","#EC4899"];
+function attColor(p: number) { return p >= 75 ? "#08BD80" : p >= 50 ? "#F59E0B" : "#FB923C"; }
 
 function downloadAllPTM(details: BatchDetail[]) {
   const seen = new Set<string>();
@@ -85,7 +87,9 @@ export default function BatchesPage() {
   const router = useRouter();
   const [batches, setBatches] = useState<Analytics[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterCenter, setFilterCenter] = useState("");
   const [newName, setNewName] = useState("");
+  const [newCenter, setNewCenter] = useState(CENTERS[0]);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetail>>({});
@@ -94,11 +98,12 @@ export default function BatchesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/batches/analytics");
+      const url = filterCenter ? `/api/admin/batches/analytics?center=${encodeURIComponent(filterCenter)}` : "/api/admin/batches/analytics";
+      const res = await fetch(url);
       setBatches(res.ok ? await res.json() : []);
     } catch {}
     setLoading(false);
-  }, []);
+  }, [filterCenter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -134,7 +139,7 @@ export default function BatchesPage() {
     try {
       const res = await fetch("/api/admin/batches", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({ name: newName.trim(), center: newCenter }),
       });
       const d = await res.json();
       if (res.ok) { showToast(`"${newName.trim()}" created`, true); setNewName(""); load(); }
@@ -164,8 +169,8 @@ export default function BatchesPage() {
             style={{
               position: "fixed", top: 22, right: 22, zIndex: 200,
               background: "var(--admin-card-bg)",
-              border: `1px solid ${toast.ok ? "rgba(22,163,74,0.3)" : "rgba(220,38,38,0.3)"}`,
-              color: toast.ok ? "#16A34A" : "#DC2626",
+              border: `1px solid ${toast.ok ? "rgba(8,189,128,0.3)" : "rgba(251,146,60,0.3)"}`,
+              color: toast.ok ? "#08BD80" : "#FB923C",
               padding: "11px 18px", borderRadius: 14, fontWeight: 600, fontSize: 13,
               boxShadow: "0 8px 28px rgba(0,0,0,0.15)",
               display: "flex", alignItems: "center", gap: 8,
@@ -177,27 +182,50 @@ export default function BatchesPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: "-0.5px" }}>Batches</h1>
-        <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>
-          {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students, search, and filter
-        </p>
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: "-0.5px" }}>Batches</h1>
+          <p style={{ color: "var(--admin-text-muted)", fontSize: 13, margin: "4px 0 0" }}>
+            {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students
+          </p>
+        </div>
+        {/* Center filter */}
+        <select
+          value={filterCenter}
+          onChange={e => setFilterCenter(e.target.value)}
+          style={{
+            padding: "8px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
+            fontSize: 13, background: "var(--admin-input-bg)", color: "var(--admin-text)", outline: "none", cursor: "pointer",
+          }}
+        >
+          <option value="">All Centers</option>
+          {CENTERS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       {/* Create form */}
       <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: "18px 22px", marginBottom: 24 }}>
         <h2 style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)", margin: "0 0 12px", letterSpacing: "-0.2px" }}>New Batch</h2>
-        <form onSubmit={handleCreate} style={{ display: "flex", gap: 8 }}>
+        <form onSubmit={handleCreate} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
             placeholder="e.g. JEE 2026, NEET Morning, CONQUER+"
             value={newName} onChange={e => setNewName(e.target.value)}
             style={{
-              flex: 1, padding: "9px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
+              flex: 1, minWidth: 200, padding: "9px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
               fontSize: 13, outline: "none", background: "var(--admin-input-bg)", color: "var(--admin-text)",
             }}
           />
+          <select
+            value={newCenter} onChange={e => setNewCenter(e.target.value)}
+            style={{
+              padding: "9px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
+              fontSize: 13, background: "var(--admin-input-bg)", color: "var(--admin-text)", outline: "none", cursor: "pointer",
+            }}
+          >
+            {CENTERS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <button type="submit" disabled={creating || !newName.trim()} style={{
-            padding: "9px 20px", background: "#1D6BF3", color: "#fff",
+            padding: "9px 20px", background: "#08BD80", color: "#fff",
             border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600,
             cursor: creating || !newName.trim() ? "not-allowed" : "pointer",
             opacity: creating || !newName.trim() ? 0.55 : 1,
@@ -245,6 +273,9 @@ export default function BatchesPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                           <span style={{ background: `${color}18`, color, borderRadius: 100, padding: "4px 14px", fontSize: 13, fontWeight: 700 }}>
                             {batch.name}
+                          </span>
+                          <span style={{ background: "var(--admin-card-border)", color: "var(--admin-text-muted)", borderRadius: 100, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
+                            {batch.center}
                           </span>
                           <span style={{ fontSize: 13, color: "var(--admin-text-muted)" }}>
                             {batch.totalStudents} student{batch.totalStudents !== 1 ? "s" : ""}
