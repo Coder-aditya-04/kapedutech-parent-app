@@ -16,7 +16,7 @@ export async function qrScan(req: Request, res: Response): Promise<void> {
   // 3. Plain enrollment number string
   let student;
   if (qrCode.includes(":")) {
-    const [studentId] = qrCode.split(":");
+    const studentId = qrCode.split(":")[0] as string;
     student = await prisma.student.findUnique({
       where: { id: studentId },
       include: { parent: true },
@@ -78,16 +78,18 @@ export async function qrScan(req: Request, res: Response): Promise<void> {
     data: { studentId: student.id, date: today, type, notificationSent: false },
   });
 
+  console.log(`[${type}] ${studentName} at ${time}`);
+  res.status(200).json({ success: true, studentName, time, type });
+
+  // Fire-and-forget — never block the scan response on notification delivery
   const notifTitle = type === "PUNCH_IN" ? "Attendance Marked" : "Punch Out";
   const notifBody = type === "PUNCH_IN"
     ? `${studentName} punched in at ${time}`
     : `${studentName} punched out at ${time}`;
-
-  await sendPushNotification(student.parent.pushToken ?? null, notifTitle, notifBody);
-  await prisma.attendance.update({ where: { id: record.id }, data: { notificationSent: true } });
-
-  console.log(`[${type}] ${studentName} at ${time}`);
-  res.status(200).json({ success: true, studentName, time, type });
+  const pushToken = (student as { parent?: { pushToken?: string | null } }).parent?.pushToken ?? null;
+  sendPushNotification(pushToken, notifTitle, notifBody)
+    .then(() => prisma.attendance.update({ where: { id: record.id }, data: { notificationSent: true } }))
+    .catch(err => console.error("[Attendance] Notification error:", err));
 }
 
 export async function getStudentAttendance(req: Request, res: Response): Promise<void> {

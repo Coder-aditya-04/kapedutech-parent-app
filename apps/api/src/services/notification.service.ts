@@ -9,15 +9,28 @@ export async function sendPushNotification(
     console.log(`[Notification] No push token — skipping.`);
     return;
   }
+  if (!pushToken.startsWith("ExponentPushToken[")) {
+    console.warn(`[Notification] Invalid token format: ${pushToken}`);
+    return;
+  }
   const payload = { to: pushToken, title, body, sound: "default", data: { title, body } };
   console.log(`[Notification] Sending: "${title}" → ${pushToken}`);
-  const res = await fetch(EXPO_PUSH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  console.log(`[Notification] Response:`, JSON.stringify(data));
+  try {
+    const res = await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json() as { data?: { status: string; message?: string }[] };
+    const ticket = data.data?.[0];
+    if (ticket?.status === "error") {
+      console.error(`[Notification] Delivery error: ${ticket.message}`);
+    } else {
+      console.log(`[Notification] Sent OK: "${title}"`);
+    }
+  } catch (err) {
+    console.error(`[Notification] Fetch failed:`, err);
+  }
 }
 
 // Send up to 100 notifications in one Expo batch request
