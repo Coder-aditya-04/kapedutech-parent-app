@@ -154,6 +154,7 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
 
 export async function deleteStudent(req: Request, res: Response): Promise<void> {
   const id = req.params["id"] as string;
+  await prisma.testResult.deleteMany({ where: { studentId: id } });
   await prisma.attendance.deleteMany({ where: { studentId: id } });
   await prisma.student.delete({ where: { id } });
   res.json({ message: "Student deleted" });
