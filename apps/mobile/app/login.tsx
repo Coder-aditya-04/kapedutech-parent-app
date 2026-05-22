@@ -83,9 +83,14 @@ export default function LoginScreen() {
     await AsyncStorage.setItem("parent", JSON.stringify(parent));
     login(phone);
     router.replace("/(tabs)");
-    registerForPushNotifications()
-      .then(pt => { if (pt) savePushToken(parent.id, pt); })
-      .catch(() => {});
+    // Delay push permission request so the navigation fully settles first.
+    // Requesting permissions immediately after navigation on Android shows a
+    // system dialog that briefly backgrounds the app, making it look like a kick-out.
+    setTimeout(() => {
+      registerForPushNotifications()
+        .then(pt => { if (pt) savePushToken(parent.id, pt); })
+        .catch(() => {});
+    }, 2000);
   }
 
   async function finishLoginFromBackend(token: string, parent: { id: string; phone: string }) {
@@ -93,9 +98,11 @@ export default function LoginScreen() {
     await AsyncStorage.setItem("parent", JSON.stringify(parent));
     login(parent.phone ?? "");
     router.replace("/(tabs)");
-    registerForPushNotifications()
-      .then(pt => { if (pt) savePushToken(parent.id, pt); })
-      .catch(() => {});
+    setTimeout(() => {
+      registerForPushNotifications()
+        .then(pt => { if (pt) savePushToken(parent.id, pt); })
+        .catch(() => {});
+    }, 2000);
   }
 
   function handleSendOtp() {
