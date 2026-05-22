@@ -138,7 +138,7 @@ export default function AnalyticsPage() {
   const pieData = [
     { name: "Full Day", value: completedIds.size, color: "#08BD80" },
     { name: "In Progress", value: inProgressCount, color: "#F59E0B" },
-    { name: "Absent", value: absentCount, color: "#FB923C" },
+    { name: "Absent", value: absentCount, color: "#EF4444" },
   ].filter(d => d.value > 0);
 
   // Subject averages, filtered by batch
@@ -232,7 +232,7 @@ export default function AnalyticsPage() {
               { label: "Total Enrolled",  value: students.length,    pct: 100, color: "var(--admin-accent)" },
               { label: "Arrived Today",   value: presentIds.size,    pct: students.length > 0 ? Math.round(presentIds.size / students.length * 100) : 0, color: "#08BD80" },
               { label: "Full Attendance", value: completedIds.size,  pct: students.length > 0 ? Math.round(completedIds.size / students.length * 100) : 0, color: "#6366F1" },
-              { label: "Absent",          value: absentCount,         pct: students.length > 0 ? Math.round(absentCount / students.length * 100) : 0, color: "#FB923C" },
+              { label: "Absent",          value: absentCount,         pct: students.length > 0 ? Math.round(absentCount / students.length * 100) : 0, color: "#EF4444" },
             ].map((f, i) => (
               <div key={i}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -278,7 +278,7 @@ export default function AnalyticsPage() {
             {[
               { label: "Full Day",    value: completedIds.size, color: "#08BD80" },
               { label: "In Progress", value: inProgressCount,   color: "#F59E0B" },
-              { label: "Absent",      value: absentCount,        color: "#FB923C" },
+              { label: "Absent",      value: absentCount,        color: "#EF4444" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
