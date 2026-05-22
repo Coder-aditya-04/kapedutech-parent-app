@@ -24,6 +24,15 @@ export async function createStudent(req: Request, res: Response): Promise<void> 
     return;
   }
 
+  if (parentEmail) {
+    const emailOwner = await prisma.parent.findUnique({ where: { email: parentEmail } });
+    const existingParent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
+    if (emailOwner && emailOwner.id !== existingParent?.id) {
+      res.status(409).json({ message: `Email ${parentEmail} is already linked to another parent account.` });
+      return;
+    }
+  }
+
   let parent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
   if (!parent) {
     parent = await prisma.parent.create({
@@ -129,6 +138,16 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
   if (!name || !enrollmentNo || !batch || !parentPhone) {
     res.status(400).json({ message: "name, enrollmentNo, batch, parentPhone are required." });
     return;
+  }
+
+  // If an email is provided, make sure it isn't already taken by a different parent
+  if (parentEmail) {
+    const emailOwner = await prisma.parent.findUnique({ where: { email: parentEmail } });
+    const currentParent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
+    if (emailOwner && emailOwner.id !== currentParent?.id) {
+      res.status(409).json({ message: `Email ${parentEmail} is already linked to another parent account.` });
+      return;
+    }
   }
 
   let parent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
