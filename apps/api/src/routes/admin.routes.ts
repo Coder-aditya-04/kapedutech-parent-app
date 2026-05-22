@@ -13,8 +13,12 @@ import {
 } from "../controllers/admin.controller.js";
 import { listBatches, createBatch, deleteBatch, batchAnalytics, batchDetail } from "../controllers/batch.controller.js";
 import { uploadResults, listTests, getTestResults } from "../controllers/result.controller.js";
+import { requireAdminSecret } from "../middleware/adminAuth.js";
 
 const router = Router();
+
+// All admin routes require the X-Admin-Secret header
+router.use(requireAdminSecret);
 
 // Students
 router.get("/students/search", searchStudents);
