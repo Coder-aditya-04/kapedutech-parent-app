@@ -285,7 +285,7 @@ export default function StudentsPage() {
                     <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
                     <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
                     <td style={S.td}>
-                      <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 100, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5, display: "inline-block" }}>{s.batch || "—"}</span>
+                      <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.3, display: "inline-block", whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}>{s.batch || "—"}</span>
                     </td>
                     <td style={S.td}>
                       <span style={{ background: cs.bg, color: cs.color, borderRadius: 100, padding: "4px 10px", fontSize: 11, fontWeight: 600, display: "inline-block" }}>{s.center || "—"}</span>
