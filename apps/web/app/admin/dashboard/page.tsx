@@ -69,6 +69,7 @@ export default function DashboardPage() {
   const [attSearch, setAttSearch] = useState("");
   const [batchChartBatches, setBatchChartBatches] = useState<BatchAnalytics[]>([]);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [showAllRisk, setShowAllRisk] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -99,6 +100,9 @@ export default function DashboardPage() {
       .then((b: BatchAnalytics[]) => setBatchChartBatches(b))
       .catch(() => {});
   }, [batchCenter]);
+
+  // Sync batch chart with global center filter
+  useEffect(() => { setBatchCenter(center); }, [center]);
 
   useEffect(() => {
     async function fetchSpark() {
@@ -158,7 +162,7 @@ export default function DashboardPage() {
   const attPct = students.length > 0 ? Math.round(allPresentIds.size / students.length * 100) : 0;
   const atRiskBatches = batches.filter(b => b.totalStudents > 0 && b.avgAttendancePct < 75).sort((a, b) => a.avgAttendancePct - b.avgAttendancePct);
   const batchChartData = (batchChartBatches.length > 0 ? batchChartBatches : batches)
-    .filter(b => b.totalStudents > 0)
+    .filter(b => b.totalStudents > 0 && b.avgAttendancePct > 0)
     .map(b => ({ name: b.name, fullName: b.name, pct: b.avgAttendancePct, fill: attColor(b.avgAttendancePct) }))
     .sort((a, b) => b.pct - a.pct);
   const dateStr = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -345,7 +349,11 @@ export default function DashboardPage() {
               </div>
             </div>
             {batchChartData.length === 0 ? (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "var(--admin-text-faint)", fontSize: 13 }}>No batch data yet</div>
+              <div style={{ padding: "40px 0", textAlign: "center", color: "var(--admin-text-faint)", fontSize: 13 }}>
+                {(batchChartBatches.length > 0 || batches.length > 0)
+                  ? "No attendance recorded yet — scan QR codes to see data here"
+                  : "No batches found for this center"}
+              </div>
             ) : (
               <ResponsiveContainer width="100%" height={Math.max(160, batchChartData.length * 52)}>
                 <BarChart data={batchChartData} margin={{ top: 4, right: 8, left: 0, bottom: batchChartData.length > 4 ? 50 : 16 }} barCategoryGap="30%">
@@ -392,7 +400,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {atRiskBatches.map((b, i) => (
+                {(showAllRisk ? atRiskBatches : atRiskBatches.slice(0, 5)).map((b, i) => (
                   <div
                     key={b.id}
                     onClick={() => router.push(`/admin/batches/${encodeURIComponent(b.name)}`)}
@@ -415,6 +423,20 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
+              {atRiskBatches.length > 5 && (
+                <button
+                  onClick={() => setShowAllRisk(p => !p)}
+                  style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 10, color: "#F59E0B", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "background 0.15s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(245,158,11,0.12)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "rgba(245,158,11,0.06)")}
+                >
+                  {showAllRisk ? (
+                    <>Show less <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></>
+                  ) : (
+                    <>Show {atRiskBatches.length - 5} more <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></>
+                  )}
+                </button>
+              )}
             </div>
           )}
 
