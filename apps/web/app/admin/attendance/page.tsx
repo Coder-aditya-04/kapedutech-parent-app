@@ -162,26 +162,27 @@ export default function AttendancePage() {
         ))}
       </div>
 
-      {/* Center filter + Batch filter + Search */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-        {/* Center chips */}
-        <div style={{ display: "flex", gap: 6 }}>
+      {/* Row 1: Center chips + Search */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {CENTERS.map(c => (
             <button key={c} onClick={() => setCenter(c)} style={chip(center === c)}>{c}</button>
           ))}
         </div>
-        <div style={{ width: 1, height: 24, background: "var(--admin-card-border)", flexShrink: 0 }} />
-        {/* Batch chips */}
-        <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", flex: 1, minWidth: 0 }}>
-          {batches.map(b => (
-            <button key={b} onClick={() => setBatch(b)} style={{ ...chip(batch === b), flexShrink: 0 }}>{b}</button>
-          ))}
-        </div>
-        {/* Search */}
+        <div style={{ flex: 1 }} />
         <div style={{ position: "relative", flexShrink: 0 }}>
           <svg style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input placeholder="Search student..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ padding: "7px 12px 7px 32px", border: "1px solid var(--admin-input-border)", borderRadius: 100, fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-input-bg)", width: 180 }} />
+        </div>
+      </div>
+
+      {/* Row 2: Batch chips — full-width scrollable, no page overflow */}
+      <div style={{ overflowX: "auto", marginBottom: 16, scrollbarWidth: "none" }}>
+        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
+          {batches.map(b => (
+            <button key={b} onClick={() => setBatch(b)} style={chip(batch === b)}>{b}</button>
+          ))}
         </div>
       </div>
 
@@ -211,7 +212,7 @@ export default function AttendancePage() {
                     <td style={{ padding: "13px 18px", fontWeight: 600, color: "var(--admin-text)" }}>{s.student.name}</td>
                     <td style={{ padding: "13px 18px", color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.student.enrollmentNo}</td>
                     <td style={{ padding: "13px 18px" }}>
-                      <span style={{ background: batchColor(s.student.batch, batches.slice(1)), color: "#fff", borderRadius: 100, padding: "4px 12px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>{s.student.batch || "—"}</span>
+                      <span style={{ background: batchColor(s.student.batch, batches.slice(1)), color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}>{s.student.batch || "—"}</span>
                     </td>
                     <td style={{ padding: "13px 18px", color: s.punchIn ? "#059669" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400 }}>{s.punchIn ?? "—"}</td>
                     <td style={{ padding: "13px 18px", color: s.punchOut ? "#2563EB" : "var(--admin-text-faint)", fontWeight: s.punchOut ? 600 : 400 }}>{s.punchOut ?? "—"}</td>

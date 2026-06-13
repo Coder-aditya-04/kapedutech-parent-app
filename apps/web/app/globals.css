@@ -178,7 +178,7 @@ body {
 }
 
 /* ── Page content ──────────────────────────────────────────────────────────*/
-.admin-page { padding: 28px 32px; min-height: 100vh; }
+.admin-page { padding: 28px 32px; min-height: 100vh; overflow-x: hidden; }
 
 /* ── Grid helpers ──────────────────────────────────────────────────────────*/
 .stat-grid {
