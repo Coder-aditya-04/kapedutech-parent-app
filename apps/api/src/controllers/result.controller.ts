@@ -90,6 +90,15 @@ export async function listTests(req: Request, res: Response): Promise<void> {
   res.json(tests.map(t => ({ testName: t.testName, testDate: t.testDate, count: t._count.id })));
 }
 
+// Admin: delete all results for a specific test
+export async function deleteTest(req: Request, res: Response): Promise<void> {
+  const testName = decodeURIComponent(req.params["testName"] as string);
+  const testDate = str(req.query["date"]);
+  if (!testDate) { res.status(400).json({ message: "date is required" }); return; }
+  const { count } = await prisma.testResult.deleteMany({ where: { testName, testDate } });
+  res.json({ message: `Deleted ${count} results for "${testName}"` });
+}
+
 // Admin: get all results for a specific test
 export async function getTestResults(req: Request, res: Response): Promise<void> {
   const testName = decodeURIComponent(req.params["testName"] as string);

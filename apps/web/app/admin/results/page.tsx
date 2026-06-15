@@ -256,6 +256,8 @@ function ResultsPageInner() {
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [preview, setPreview] = useState<{ studentId: string; name: string; rank: number; total: number; percentage: number; scores: Record<string, number> }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TestMeta | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const cp = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
@@ -286,7 +288,7 @@ function ResultsPageInner() {
     const subjectKeywords = ["physics", "chemistry", "botany", "zoology", "biology", "maths", "math", "english"];
     hdrs.forEach(h => {
       const match = subjectKeywords.find(k => h.includes(k));
-      if (match) subjects.push({ label: match.charAt(0).toUpperCase() + match.slice(1), col: h, max: 180 });
+      if (match) subjects.push({ label: match.charAt(0).toUpperCase() + match.slice(1), col: h, max: 100 });
     });
     setMappings({ nameCol: find(["name"]), rankCol: find(["rank"]), enrollmentCol: find(["roll", "enrollment", "rollno"]), totalCol: find(["total"]), subjects });
   }
@@ -321,8 +323,8 @@ function ResultsPageInner() {
       }
       const total = parseFloat(row[mappings.totalCol] ?? "0") || 0;
       const maxMarks = mappings.subjects.length > 0
-        ? mappings.subjects.reduce((s, sub) => s + (sub.max || 180), 0)
-        : 720;
+        ? mappings.subjects.reduce((s, sub) => s + (sub.max || 100), 0)
+        : 300;
       const percentage = parseFloat(((total / maxMarks) * 100).toFixed(2));
       return { rank: parseInt(row[mappings.rankCol] ?? "0") || 0, name: row[mappings.nameCol] ?? "", enrollmentNo: mappings.enrollmentCol ? (row[mappings.enrollmentCol] ?? "") : "", scores, total, percentage };
     }).filter(r => r.name && r.rank > 0);
@@ -336,6 +338,18 @@ function ResultsPageInner() {
     else showToast(`${matched.length} of ${parsedRows.length} students matched.`, matched.length > 0);
   }
 
+  async function handleDeleteTest() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/results/test/${encodeURIComponent(deleteTarget.testName)}?date=${deleteTarget.testDate}`, { method: "DELETE" });
+      const d = await res.json();
+      if (res.ok) { showToast(d.message, true); setDeleteTarget(null); load(); }
+      else showToast(d.message ?? "Delete failed", false);
+    } catch { showToast("Network error", false); }
+    setDeleting(false);
+  }
+
   async function handleUpload() {
     if (!testName.trim() || !preview.length) { showToast("Fill test name and preview first", false); return; }
     setUploading(true);
@@ -344,7 +358,7 @@ function ResultsPageInner() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           testName: testName.trim(), testDate,
-          subjectMaxes: mappings.subjects.reduce<Record<string, number>>((m, s) => { if (s.label) m[s.label] = s.max || 180; return m; }, {}),
+          subjectMaxes: mappings.subjects.reduce<Record<string, number>>((m, s) => { if (s.label) m[s.label] = s.max || 100; return m; }, {}),
           results: preview.map(r => ({ studentId: r.studentId, rank: r.rank, totalInBatch: parsed.length, scores: r.scores, total: r.total, percentage: r.percentage })),
         }),
       });
@@ -375,9 +389,33 @@ function ResultsPageInner() {
     </div>
   );
 
+  const deleteModal = deleteTarget && (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(3px)" }}>
+      <div style={{ background: "var(--admin-card-bg)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 400, margin: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "var(--admin-text)" }}>Delete Test</h2>
+          <button onClick={() => setDeleteTarget(null)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
+        </div>
+        <p style={{ color: "var(--admin-text-muted)", fontSize: 14, margin: "0 0 6px", lineHeight: 1.6 }}>
+          Delete <strong style={{ color: "var(--admin-text)" }}>{deleteTarget.testName}</strong>?
+        </p>
+        <p style={{ color: "var(--admin-text-faint)", fontSize: 12, margin: "0 0 22px" }}>
+          This will permanently remove all {deleteTarget.count} student results for {deleteTarget.testDate}. Parents will no longer see this test.
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => setDeleteTarget(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleDeleteTest} disabled={deleting} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: deleting ? "#FCA5A5" : "#DC2626", color: "#fff", fontSize: 14, fontWeight: 700, cursor: deleting ? "not-allowed" : "pointer" }}>
+            {deleting ? "Deleting..." : "Delete Test"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="admin-page">
       {toastEl}
+      {deleteModal}
 
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Results</h1>
@@ -458,7 +496,7 @@ function ResultsPageInner() {
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <p style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Subjects</p>
-                  <button onClick={() => setMappings(m => ({ ...m, subjects: [...m.subjects, { label: "", col: "", max: 180 }] }))} style={{ fontSize: 12, color: "var(--admin-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
+                  <button onClick={() => setMappings(m => ({ ...m, subjects: [...m.subjects, { label: "", col: "", max: 100 }] }))} style={{ fontSize: 12, color: "var(--admin-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
                 </div>
                 {mappings.subjects.map((sub, i) => (
                   <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 72px 24px", gap: 6, marginBottom: 6 }}>
@@ -467,7 +505,7 @@ function ResultsPageInner() {
                       <option value="">— column —</option>
                       {headers.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
-                    <input type="number" placeholder="Max" min={1} value={sub.max || ""} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], max: parseInt(e.target.value) || 180 }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 13 }} title="Max marks for this subject" />
+                    <input type="number" placeholder="Max" min={1} value={sub.max || ""} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], max: parseInt(e.target.value) || 100 }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 13 }} title="Max marks for this subject" />
                     <button onClick={() => setMappings(m => ({ ...m, subjects: m.subjects.filter((_, j) => j !== i) }))} style={{ border: "none", background: "rgba(220,38,38,0.15)", color: "#EF4444", borderRadius: 6, cursor: "pointer" }}>✕</button>
                   </div>
                 ))}
@@ -519,12 +557,20 @@ function ResultsPageInner() {
             <div key={i} style={{ padding: "12px 0", borderBottom: i < tests.length - 1 ? "1px solid var(--admin-card-border)" : "none" }}>
               <p style={{ margin: "0 0 2px", fontWeight: 600, color: "var(--admin-text)", fontSize: 14 }}>{t.testName}</p>
               <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--admin-text-faint)" }}>{t.testDate} · {t.count} students</p>
-              <button
-                onClick={() => setSelectedTest(t)}
-                style={{ padding: "5px 14px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 8, color: "#6366F1", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-              >
-                📊 View Analytics
-              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => setSelectedTest(t)}
+                  style={{ padding: "5px 14px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 8, color: "#6366F1", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  📊 View Analytics
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(t)}
+                  style={{ padding: "5px 10px", background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 8, color: "#DC2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  🗑 Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
