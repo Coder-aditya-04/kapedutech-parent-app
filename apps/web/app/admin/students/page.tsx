@@ -130,6 +130,14 @@ export default function StudentsPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setTimeout(() => load(search || undefined), 300); return () => clearTimeout(t); }, [search, load]);
 
+  // Auto-refresh: every 20s + instantly when tab regains focus (silent — no spinner)
+  useEffect(() => {
+    const id = setInterval(() => load(search || undefined), 20000);
+    const onVisible = () => { if (!document.hidden) load(search || undefined); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [load, search]);
+
   function showToast(msg: string, ok: boolean) { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500); }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {

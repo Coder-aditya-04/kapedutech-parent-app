@@ -95,8 +95,8 @@ export default function BatchesPage() {
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetail>>({});
   const [downloadingPTM, setDownloadingPTM] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const url = filterCenter ? `/api/admin/batches/analytics?center=${encodeURIComponent(filterCenter)}` : "/api/admin/batches/analytics";
       const res = await fetch(url);
@@ -106,6 +106,14 @@ export default function BatchesPage() {
   }, [filterCenter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-refresh: every 20s + instantly when tab regains focus (silent — no spinner)
+  useEffect(() => {
+    const id = setInterval(() => load(true), 20000);
+    const onVisible = () => { if (!document.hidden) load(true); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [load]);
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });

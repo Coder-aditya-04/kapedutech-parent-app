@@ -91,6 +91,14 @@ export default function AttendancePage() {
 
   useEffect(() => { setLoading(true); load(); }, [load]);
 
+  // Auto-refresh: every 10s + instantly when tab regains focus (silent — no spinner)
+  useEffect(() => {
+    const id = setInterval(load, 10000);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [load]);
+
   const summaryMap = new Map<string, Summary>();
   records.forEach(r => {
     if (!summaryMap.has(r.studentId)) summaryMap.set(r.studentId, { student: r.student, punchIn: null, punchOut: null, punchInMs: null, punchOutMs: null });
@@ -193,7 +201,7 @@ export default function AttendancePage() {
             <thead>
               <tr>
                 {["Name", "Enrollment", "Batch", "Punch In", "Punch Out", "Duration", "Status"].map(h => (
-                  <th key={h} style={{ padding: "11px 18px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, background: "var(--admin-input-bg)" }}>{h}</th>
+                  <th key={h} style={{ padding: "11px 12px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -209,16 +217,16 @@ export default function AttendancePage() {
                 const statusBg   = status === "Complete" ? "rgba(5,150,105,0.1)" : status === "Partial" ? "rgba(217,119,6,0.1)" : "rgba(220,38,38,0.1)";
                 return (
                   <tr key={s.student.id} style={{ borderTop: "1px solid var(--admin-card-border)" }}>
-                    <td style={{ padding: "13px 18px", fontWeight: 600, color: "var(--admin-text)" }}>{s.student.name}</td>
-                    <td style={{ padding: "13px 18px", color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.student.enrollmentNo}</td>
-                    <td style={{ padding: "13px 18px" }}>
-                      <span style={{ background: batchColor(s.student.batch, batches.slice(1)), color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}>{s.student.batch || "—"}</span>
+                    <td style={{ padding: "12px", fontWeight: 600, color: "var(--admin-text)", whiteSpace: "nowrap" }}>{s.student.name}</td>
+                    <td style={{ padding: "12px", color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{s.student.enrollmentNo}</td>
+                    <td style={{ padding: "12px" }}>
+                      <span style={{ background: batchColor(s.student.batch, batches.slice(1)), color: "#fff", borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{s.student.batch || "—"}</span>
                     </td>
-                    <td style={{ padding: "13px 18px", color: s.punchIn ? "#059669" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400 }}>{s.punchIn ?? "—"}</td>
-                    <td style={{ padding: "13px 18px", color: s.punchOut ? "#2563EB" : "var(--admin-text-faint)", fontWeight: s.punchOut ? 600 : 400 }}>{s.punchOut ?? "—"}</td>
-                    <td style={{ padding: "13px 18px", color: "var(--admin-text-muted)", fontWeight: 500 }}>{dur}</td>
-                    <td style={{ padding: "13px 18px" }}>
-                      <span style={{ background: statusBg, color: statusColor, borderRadius: 20, padding: "4px 11px", fontSize: 12, fontWeight: 700 }}>{status}</span>
+                    <td style={{ padding: "12px", color: s.punchIn ? "#059669" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400, whiteSpace: "nowrap" }}>{s.punchIn ?? "—"}</td>
+                    <td style={{ padding: "12px", color: s.punchOut ? "#2563EB" : "var(--admin-text-faint)", fontWeight: s.punchOut ? 600 : 400, whiteSpace: "nowrap" }}>{s.punchOut ?? "—"}</td>
+                    <td style={{ padding: "12px", color: "var(--admin-text-muted)", fontWeight: 500, whiteSpace: "nowrap" }}>{dur}</td>
+                    <td style={{ padding: "12px" }}>
+                      <span style={{ background: statusBg, color: statusColor, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{status}</span>
                     </td>
                   </tr>
                 );

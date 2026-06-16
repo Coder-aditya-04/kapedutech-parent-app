@@ -272,6 +272,14 @@ function ResultsPageInner() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Auto-refresh: every 30s + instantly when tab regains focus (silent — no spinner)
+  useEffect(() => {
+    const id = setInterval(load, 30000);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [load]);
+
   useEffect(() => {
     const qTest = searchParams.get("test");
     const qDate = searchParams.get("date");

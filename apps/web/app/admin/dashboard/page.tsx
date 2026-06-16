@@ -91,7 +91,13 @@ export default function DashboardPage() {
     setLoading(false);
   }, [center]);
 
-  useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 10000); // 10s — fast multi-admin sync
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [load]);
 
   useEffect(() => {
     const cp = batchCenter !== "All" ? `?center=${encodeURIComponent(batchCenter)}` : "";
