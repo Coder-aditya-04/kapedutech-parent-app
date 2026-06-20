@@ -46,8 +46,8 @@ const CENTER_COLORS: Record<string, { bg: string; color: string }> = {
 
 const S = {
   card: { background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" },
-  th: { padding: "11px 18px", textAlign: "left" as const, color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: 0.7, background: "var(--admin-input-bg)" },
-  td: { padding: "13px 18px" },
+  th: { padding: "11px 14px", textAlign: "left" as const, color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" as const },
+  td: { padding: "12px 14px", whiteSpace: "nowrap" as const },
   inp: { width: "100%", padding: "10px 12px", border: "1.5px solid var(--admin-input-border)", borderRadius: 10, fontSize: 14, boxSizing: "border-box" as const, outline: "none", color: "var(--admin-text)", background: "var(--admin-input-bg)", fontFamily: "inherit" },
   modal: { background: "var(--admin-card-bg)", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", margin: 16 },
   overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(3px)" },
@@ -340,13 +340,13 @@ export default function StudentsPage() {
                       <input type="checkbox" checked={isChecked} onChange={() => toggleOne(s.id)}
                         style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
                     </td>
-                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
+                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)", whiteSpace: "normal", minWidth: 120 }}>{s.name}</td>
                     <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
                     <td style={S.td}>
                       <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.3, display: "inline-block", whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}>{s.batch || "—"}</span>
                     </td>
                     <td style={S.td}>
-                      <span style={{ background: cs.bg, color: cs.color, borderRadius: 100, padding: "4px 10px", fontSize: 11, fontWeight: 600, display: "inline-block" }}>{s.center || "—"}</span>
+                      <span style={{ background: cs.bg, color: cs.color, borderRadius: 100, padding: "4px 10px", fontSize: 11, fontWeight: 600, display: "inline-block", whiteSpace: "nowrap" }}>{s.center || "—"}</span>
                     </td>
                     <td style={{ ...S.td, color: "var(--admin-text-muted)" }}>{s.parent?.name ?? "—"}</td>
                     <td style={{ ...S.td, color: "var(--admin-accent)", fontSize: 13, fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
