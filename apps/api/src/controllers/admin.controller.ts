@@ -242,11 +242,18 @@ export async function importStudents(req: Request, res: Response): Promise<void>
     try {
       let parent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
       if (!parent) {
+        // If the email is already taken by a different parent, import without email
+        const safeEmail = parentEmail
+          ? (await prisma.parent.findUnique({ where: { email: parentEmail } })) ? null : parentEmail
+          : null;
         parent = await prisma.parent.create({
-          data: { name: parentName || "Parent", phone: parentPhone, email: parentEmail || null },
+          data: { name: parentName || "Parent", phone: parentPhone, email: safeEmail },
         });
       } else if (parentEmail && !parent.email) {
-        parent = await prisma.parent.update({ where: { id: parent.id }, data: { email: parentEmail } });
+        const emailTaken = await prisma.parent.findUnique({ where: { email: parentEmail } });
+        if (!emailTaken) {
+          parent = await prisma.parent.update({ where: { id: parent.id }, data: { email: parentEmail } });
+        }
       }
       const existing = await prisma.student.findFirst({ where: { enrollmentNo } });
       if (existing) { skipped++; continue; }

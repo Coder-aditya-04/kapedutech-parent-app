@@ -19,12 +19,32 @@ function exportCSV(students: Student[]) {
   URL.revokeObjectURL(url);
 }
 
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]!;
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (c === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += c;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
 function parseImportCSV(text: string): ImportRow[] {
   const lines = text.trim().split("\n").filter(l => l.trim());
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").trim().toLowerCase().replace(/\s+/g, ""));
+  const headers = parseCSVLine(lines[0]!).map(h => h.toLowerCase().replace(/\s+/g, ""));
   return lines.slice(1).map(line => {
-    const vals = line.split(",").map(v => v.replace(/^"|"$/g, "").trim());
+    const vals = parseCSVLine(line);
     const get = (keys: string[]) => vals[headers.findIndex(h => keys.includes(h))] ?? "";
     return {
       name: get(["name", "studentname"]),
@@ -111,6 +131,7 @@ export default function StudentsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [filterBatch, setFilterBatch] = useState("All");
 
   const load = useCallback(async (q?: string) => {
     try {
@@ -127,6 +148,7 @@ export default function StudentsPage() {
       setBatches(b);
       setForm(f => ({ ...f, batch: f.batch || b[0]?.name || "" }));
       setSelected(new Set());
+      setFilterBatch("All");
     } catch {}
     setLoading(false);
   }, [center]);
@@ -208,12 +230,13 @@ export default function StudentsPage() {
     setBulkDeleting(false);
   }
 
-  const allSelected = students.length > 0 && students.every(s => selected.has(s.id));
+  const displayStudents = filterBatch === "All" ? students : students.filter(s => s.batch === filterBatch);
+  const allSelected = displayStudents.length > 0 && displayStudents.every(s => selected.has(s.id));
   const someSelected = selected.size > 0;
 
   function toggleAll() {
     if (allSelected) setSelected(new Set());
-    else setSelected(new Set(students.map(s => s.id)));
+    else setSelected(new Set(displayStudents.map(s => s.id)));
   }
 
   function toggleOne(id: string) {
@@ -273,7 +296,7 @@ export default function StudentsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Students</h1>
-          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14, margin: "4px 0 0" }}>{loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""}${center !== "All" ? ` · ${center}` : ""}`}</p>
+          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14, margin: "4px 0 0" }}>{loading ? "Loading..." : `${displayStudents.length} of ${students.length} student${students.length !== 1 ? "s" : ""}${center !== "All" ? ` · ${center}` : ""}${filterBatch !== "All" ? ` · ${filterBatch}` : ""}`}</p>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           {someSelected && (
@@ -297,8 +320,8 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* Center filter + Search */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Row 1: Center filter + Search */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {CENTERS.map(c => (
             <button key={c} onClick={() => setCenter(c)} style={S.chip(center === c)}>{c}</button>
@@ -308,6 +331,15 @@ export default function StudentsPage() {
           <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--admin-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input placeholder="Search by name or enrollment no..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ ...S.inp, paddingLeft: 38, borderRadius: 100 }} />
+        </div>
+      </div>
+
+      {/* Row 2: Batch filter chips — scrollable */}
+      <div style={{ overflowX: "auto", marginBottom: 16, scrollbarWidth: "none" }}>
+        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
+          {["All", ...batches.map(b => b.name)].map(b => (
+            <button key={b} onClick={() => setFilterBatch(b)} style={S.chip(filterBatch === b)}>{b}</button>
+          ))}
         </div>
       </div>
 
@@ -329,9 +361,9 @@ export default function StudentsPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading...</td></tr>
-              ) : students.length === 0 ? (
+              ) : displayStudents.length === 0 ? (
                 <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No students found</td></tr>
-              ) : students.map(s => {
+              ) : displayStudents.map(s => {
                 const cs = centerStyle(s.center);
                 const isChecked = selected.has(s.id);
                 return (
@@ -340,7 +372,7 @@ export default function StudentsPage() {
                       <input type="checkbox" checked={isChecked} onChange={() => toggleOne(s.id)}
                         style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
                     </td>
-                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)", whiteSpace: "normal", minWidth: 120 }}>{s.name}</td>
+                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
                     <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
                     <td style={S.td}>
                       <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.3, display: "inline-block", whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}>{s.batch || "—"}</span>
