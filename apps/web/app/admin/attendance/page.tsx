@@ -6,11 +6,6 @@ type AttendanceRecord = { id: string; studentId: string; date: string; type: "PU
 type Summary = { student: Student; punchIn: string | null; punchOut: string | null; punchInMs: number | null; punchOutMs: number | null };
 
 const CENTERS = ["All", "College Road", "Nashik Road"];
-const BATCH_COLORS = ["#0064E0", "#6441D2", "#059669", "#D97706", "#0891B2", "#DC2626"];
-function batchColor(batchName: string, allBatches: string[]) {
-  const idx = allBatches.indexOf(batchName);
-  return BATCH_COLORS[idx % BATCH_COLORS.length] ?? "#0064E0";
-}
 
 function duration(inMs: number, outMs: number) {
   const diff = Math.floor((outMs - inMs) / 60000);
@@ -42,23 +37,41 @@ const chip = (active: boolean): React.CSSProperties => ({
   fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
 });
 
+const BATCH_COLORS_MAP = ["#0064E0", "#6441D2", "#059669", "#D97706", "#0891B2", "#DC2626"];
+function batchColorByIndex(name: string, list: string[]) {
+  const i = list.indexOf(name);
+  return BATCH_COLORS_MAP[i % BATCH_COLORS_MAP.length] ?? "#0064E0";
+}
+
 export default function AttendancePage() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [batch, setBatch] = useState("All");
-  const [batches, setBatches] = useState<string[]>(["All"]);
+  const [batches, setBatches] = useState<string[]>([]);
   const [center, setCenter] = useState("All");
   const [search, setSearch] = useState("");
+  const [showBatchFilter, setShowBatchFilter] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
 
+  // Reload batches whenever center changes — keeps dropdown in sync
   useEffect(() => {
-    fetch("/api/admin/batches")
+    const cp = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
+    fetch(`/api/admin/batches${cp}`)
       .then(r => r.ok ? r.json() : [])
-      .then((data: { name: string }[]) => setBatches(["All", ...data.map(b => b.name)]))
+      .then((data: { name: string }[]) => setBatches(data.map(b => b.name)))
       .catch(() => {});
-  }, []);
+    setBatch("All");
+  }, [center]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showBatchFilter) return;
+    const close = () => setShowBatchFilter(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [showBatchFilter]);
 
   const load = useCallback(async () => {
     try {
@@ -170,8 +183,8 @@ export default function AttendancePage() {
         ))}
       </div>
 
-      {/* Row 1: Center chips + Search */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+      {/* Center chips + Search */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {CENTERS.map(c => (
             <button key={c} onClick={() => setCenter(c)} style={chip(center === c)}>{c}</button>
@@ -185,23 +198,45 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Row 2: Batch chips — full-width scrollable, no page overflow */}
-      <div style={{ overflowX: "auto", marginBottom: 16, scrollbarWidth: "none" }}>
-        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
-          {batches.map(b => (
-            <button key={b} onClick={() => setBatch(b)} style={chip(batch === b)}>{b}</button>
-          ))}
-        </div>
-      </div>
-
       {/* Table */}
       <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", overflow: "hidden" }}>
         <div className="table-wrap">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
-                {["Name", "Enrollment", "Batch", "Punch In", "Punch Out", "Duration", "Status"].map(h => (
-                  <th key={h} style={{ padding: "11px 12px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" }}>{h}</th>
+                {(["Name", "Enrollment"] as const).map(h => (
+                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+                {/* Batch header with column-filter dropdown */}
+                <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap", position: "relative" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span>Batch</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowBatchFilter(p => !p); }}
+                      title={batch !== "All" ? `Filtered: ${batch}` : "Filter by batch"}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: 4, border: "none", cursor: "pointer", background: batch !== "All" ? "var(--admin-accent)" : "rgba(128,128,128,0.12)", color: batch !== "All" ? "#fff" : "var(--admin-text-faint)", flexShrink: 0 }}
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    </button>
+                  </div>
+                  {showBatchFilter && (
+                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 30, background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,0.15)", padding: 6, minWidth: 170, maxHeight: 280, overflowY: "auto" }}>
+                      <button onClick={() => { setBatch("All"); setShowBatchFilter(false); }}
+                        style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "6px 10px", borderRadius: 7, border: "none", background: batch === "All" ? "var(--admin-accent)" : "transparent", color: batch === "All" ? "#fff" : "var(--admin-text)", fontSize: 12, fontWeight: batch === "All" ? 700 : 400, cursor: "pointer" }}>
+                        All Batches
+                      </button>
+                      {batches.map(b => (
+                        <button key={b} onClick={() => { setBatch(b); setShowBatchFilter(false); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 10px", borderRadius: 7, border: "none", background: batch === b ? "var(--admin-accent)" : "transparent", color: batch === b ? "#fff" : "var(--admin-text)", fontSize: 12, fontWeight: batch === b ? 700 : 400, cursor: "pointer" }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: batch === b ? "#fff" : batchColorByIndex(b, batches), display: "inline-block", flexShrink: 0 }} />
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </th>
+                {(["Punch In", "Punch Out", "Duration", "Status"] as const).map(h => (
+                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -217,16 +252,16 @@ export default function AttendancePage() {
                 const statusBg   = status === "Complete" ? "rgba(5,150,105,0.1)" : status === "Partial" ? "rgba(217,119,6,0.1)" : "rgba(220,38,38,0.1)";
                 return (
                   <tr key={s.student.id} style={{ borderTop: "1px solid var(--admin-card-border)" }}>
-                    <td style={{ padding: "12px", fontWeight: 600, color: "var(--admin-text)", whiteSpace: "nowrap" }}>{s.student.name}</td>
-                    <td style={{ padding: "12px", color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{s.student.enrollmentNo}</td>
-                    <td style={{ padding: "12px" }}>
-                      <span style={{ background: batchColor(s.student.batch, batches.slice(1)), color: "#fff", borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{s.student.batch || "—"}</span>
+                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "var(--admin-text)", whiteSpace: "nowrap" }}>{s.student.name}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 12, whiteSpace: "nowrap" }}>{s.student.enrollmentNo}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{ background: batchColorByIndex(s.student.batch, batches), color: "#fff", borderRadius: 7, padding: "3px 8px", fontSize: 10, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{s.student.batch || "—"}</span>
                     </td>
-                    <td style={{ padding: "12px", color: s.punchIn ? "#059669" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400, whiteSpace: "nowrap" }}>{s.punchIn ?? "—"}</td>
-                    <td style={{ padding: "12px", color: s.punchOut ? "#2563EB" : "var(--admin-text-faint)", fontWeight: s.punchOut ? 600 : 400, whiteSpace: "nowrap" }}>{s.punchOut ?? "—"}</td>
-                    <td style={{ padding: "12px", color: "var(--admin-text-muted)", fontWeight: 500, whiteSpace: "nowrap" }}>{dur}</td>
-                    <td style={{ padding: "12px" }}>
-                      <span style={{ background: statusBg, color: statusColor, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{status}</span>
+                    <td style={{ padding: "10px 12px", color: s.punchIn ? "#059669" : "var(--admin-text-faint)", fontWeight: s.punchIn ? 600 : 400, whiteSpace: "nowrap" }}>{s.punchIn ?? "—"}</td>
+                    <td style={{ padding: "10px 12px", color: s.punchOut ? "#2563EB" : "var(--admin-text-faint)", fontWeight: s.punchOut ? 600 : 400, whiteSpace: "nowrap" }}>{s.punchOut ?? "—"}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--admin-text-muted)", fontWeight: 500, whiteSpace: "nowrap" }}>{dur}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{ background: statusBg, color: statusColor, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{status}</span>
                     </td>
                   </tr>
                 );
