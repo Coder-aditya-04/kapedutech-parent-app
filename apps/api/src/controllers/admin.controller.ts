@@ -173,9 +173,14 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
 
 export async function deleteStudent(req: Request, res: Response): Promise<void> {
   const id = req.params["id"] as string;
+  const student = await prisma.student.findUnique({ where: { id }, select: { parentId: true } });
+  if (!student) { res.status(404).json({ message: "Student not found" }); return; }
   await prisma.testResult.deleteMany({ where: { studentId: id } });
   await prisma.attendance.deleteMany({ where: { studentId: id } });
   await prisma.student.delete({ where: { id } });
+  // Delete parent if they have no remaining students (so email/phone are freed for re-add)
+  const remaining = await prisma.student.count({ where: { parentId: student.parentId } });
+  if (remaining === 0) await prisma.parent.delete({ where: { id: student.parentId } }).catch(() => {});
   res.json({ message: "Student deleted" });
 }
 
@@ -185,9 +190,16 @@ export async function bulkDeleteStudents(req: Request, res: Response): Promise<v
     res.status(400).json({ message: "ids array is required" });
     return;
   }
+  const students = await prisma.student.findMany({ where: { id: { in: ids } }, select: { parentId: true } });
+  const parentIds = [...new Set(students.map(s => s.parentId))];
   await prisma.testResult.deleteMany({ where: { studentId: { in: ids } } });
   await prisma.attendance.deleteMany({ where: { studentId: { in: ids } } });
   const { count } = await prisma.student.deleteMany({ where: { id: { in: ids } } });
+  // Delete orphaned parents so their email/phone are freed
+  for (const parentId of parentIds) {
+    const remaining = await prisma.student.count({ where: { parentId } });
+    if (remaining === 0) await prisma.parent.delete({ where: { id: parentId } }).catch(() => {});
+  }
   res.json({ message: `Deleted ${count} students`, count });
 }
 

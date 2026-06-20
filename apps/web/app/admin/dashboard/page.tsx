@@ -110,6 +110,9 @@ export default function DashboardPage() {
   // Sync batch chart with global center filter
   useEffect(() => { setBatchCenter(center); }, [center]);
 
+  // Clear subject data when center changes — prevents stale data from previous center showing
+  useEffect(() => { setSubjectRaw([]); setSubjectBatch("All"); }, [center]);
+
   useEffect(() => {
     async function fetchSpark() {
       const days = Array.from({ length: 7 }, (_, i) => {
