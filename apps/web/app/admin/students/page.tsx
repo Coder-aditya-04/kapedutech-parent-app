@@ -66,8 +66,8 @@ const CENTER_COLORS: Record<string, { bg: string; color: string }> = {
 
 const S = {
   card: { background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" },
-  th: { padding: "11px 14px", textAlign: "left" as const, color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" as const },
-  td: { padding: "12px 14px", whiteSpace: "nowrap" as const },
+  th: { padding: "9px 10px", textAlign: "left" as const, color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" as const, letterSpacing: 0.7, background: "var(--admin-input-bg)", whiteSpace: "nowrap" as const },
+  td: { padding: "9px 10px", whiteSpace: "nowrap" as const, fontSize: 13 },
   inp: { width: "100%", padding: "10px 12px", border: "1.5px solid var(--admin-input-border)", borderRadius: 10, fontSize: 14, boxSizing: "border-box" as const, outline: "none", color: "var(--admin-text)", background: "var(--admin-input-bg)", fontFamily: "inherit" },
   modal: { background: "var(--admin-card-bg)", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", margin: 16 },
   overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, backdropFilter: "blur(3px)" },
@@ -132,6 +132,7 @@ export default function StudentsPage() {
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [filterBatch, setFilterBatch] = useState("All");
+  const [showBatchFilter, setShowBatchFilter] = useState(false);
 
   const load = useCallback(async (q?: string) => {
     try {
@@ -155,6 +156,14 @@ export default function StudentsPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setTimeout(() => load(search || undefined), 300); return () => clearTimeout(t); }, [search, load]);
+
+  // Close batch filter dropdown when clicking outside
+  useEffect(() => {
+    if (!showBatchFilter) return;
+    const close = () => setShowBatchFilter(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [showBatchFilter]);
 
   // Auto-refresh: every 20s + instantly when tab regains focus (silent — no spinner)
   useEffect(() => {
@@ -320,8 +329,8 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* Row 1: Center filter + Search */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Center filter + Search */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {CENTERS.map(c => (
             <button key={c} onClick={() => setCenter(c)} style={S.chip(center === c)}>{c}</button>
@@ -334,28 +343,48 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* Row 2: Batch filter chips — scrollable */}
-      <div style={{ overflowX: "auto", marginBottom: 16, scrollbarWidth: "none" }}>
-        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
-          {["All", ...batches.map(b => b.name)].map(b => (
-            <button key={b} onClick={() => setFilterBatch(b)} style={S.chip(filterBatch === b)}>{b}</button>
-          ))}
-        </div>
-      </div>
-
       {/* Table */}
       <div style={S.card}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
-                <th style={{ ...S.th, width: 40, paddingRight: 0 }}>
+                <th style={{ ...S.th, width: 36, paddingRight: 0 }}>
                   <input type="checkbox" checked={allSelected} onChange={toggleAll}
-                    style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
+                    style={{ width: 15, height: 15, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
                 </th>
-                {["Name", "Enrollment No", "Batch", "Center", "Parent Name", "Parent Phone", "Parent Email", "Actions"].map(h => (
-                  <th key={h} style={S.th}>{h}</th>
-                ))}
+                <th style={S.th}>Name</th>
+                <th style={S.th}>Enrollment No</th>
+                {/* Batch header with column filter dropdown */}
+                <th style={{ ...S.th, position: "relative" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span>Batch</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowBatchFilter(p => !p); }}
+                      title={filterBatch !== "All" ? `Filtered: ${filterBatch}` : "Filter by batch"}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: 4, border: "none", cursor: "pointer", background: filterBatch !== "All" ? "var(--admin-accent)" : "rgba(128,128,128,0.12)", color: filterBatch !== "All" ? "#fff" : "var(--admin-text-faint)", flexShrink: 0 }}
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    </button>
+                  </div>
+                  {showBatchFilter && (
+                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 30, background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,0.15)", padding: 6, minWidth: 170, maxHeight: 280, overflowY: "auto" }}>
+                      {["All", ...batches.map(b => b.name)].map(b => (
+                        <button key={b} onClick={() => { setFilterBatch(b); setShowBatchFilter(false); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 10px", borderRadius: 7, border: "none", background: filterBatch === b ? "var(--admin-accent)" : "transparent", color: filterBatch === b ? "#fff" : "var(--admin-text)", fontSize: 12, fontWeight: filterBatch === b ? 700 : 400, cursor: "pointer", textTransform: "none", letterSpacing: 0 }}
+                        >
+                          {b !== "All" && <span style={{ width: 8, height: 8, borderRadius: 2, background: filterBatch === b ? "#fff" : batchColor(b), display: "inline-block", flexShrink: 0 }} />}
+                          {b === "All" ? "All Batches" : b}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </th>
+                <th style={S.th}>Center</th>
+                <th style={S.th}>Parent Name</th>
+                <th style={S.th}>Phone</th>
+                <th style={S.th}>Email</th>
+                <th style={S.th}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -368,33 +397,33 @@ export default function StudentsPage() {
                 const isChecked = selected.has(s.id);
                 return (
                   <tr key={s.id} style={{ ...S.row, background: isChecked ? "rgba(79,70,229,0.04)" : undefined }}>
-                    <td style={{ ...S.td, width: 40, paddingRight: 0 }}>
+                    <td style={{ ...S.td, width: 36, paddingRight: 0 }}>
                       <input type="checkbox" checked={isChecked} onChange={() => toggleOne(s.id)}
-                        style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
+                        style={{ width: 15, height: 15, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
                     </td>
-                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
-                    <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
+                    <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</td>
+                    <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace" }}>{s.enrollmentNo}</td>
                     <td style={S.td}>
-                      <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.3, display: "inline-block", whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}>{s.batch || "—"}</span>
+                      <span style={{ background: batchColor(s.batch), color: "#fff", borderRadius: 7, padding: "3px 8px", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, display: "inline-block", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{s.batch || "—"}</span>
                     </td>
                     <td style={S.td}>
-                      <span style={{ background: cs.bg, color: cs.color, borderRadius: 100, padding: "4px 10px", fontSize: 11, fontWeight: 600, display: "inline-block", whiteSpace: "nowrap" }}>{s.center || "—"}</span>
+                      <span style={{ background: cs.bg, color: cs.color, borderRadius: 100, padding: "3px 8px", fontSize: 10, fontWeight: 600, display: "inline-block", whiteSpace: "nowrap" }}>{s.center || "—"}</span>
                     </td>
-                    <td style={{ ...S.td, color: "var(--admin-text-muted)" }}>{s.parent?.name ?? "—"}</td>
-                    <td style={{ ...S.td, color: "var(--admin-accent)", fontSize: 13, fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
-                    <td style={{ ...S.td, color: "var(--admin-text-muted)", fontSize: 12 }}>
+                    <td style={{ ...S.td, color: "var(--admin-text-muted)", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{s.parent?.name ?? "—"}</td>
+                    <td style={{ ...S.td, color: "var(--admin-accent)", fontFamily: "monospace" }}>{s.parent?.phone ?? "—"}</td>
+                    <td style={{ ...S.td, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>
                       {s.parent?.email
                         ? <span style={{ color: "var(--admin-accent)" }}>{s.parent.email}</span>
                         : <span style={{ color: "var(--admin-text-faint)", fontStyle: "italic" }}>not set</span>
                       }
                     </td>
-                    <td style={S.td}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => openEdit(s)} style={{ width: 30, height: 30, border: "1px solid var(--admin-card-border)", borderRadius: 8, background: "var(--admin-card-bg)", color: "#4F46E5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <td style={{ ...S.td, paddingRight: 12 }}>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        <button onClick={() => openEdit(s)} style={{ width: 28, height: 28, border: "1px solid var(--admin-card-border)", borderRadius: 7, background: "var(--admin-card-bg)", color: "#4F46E5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
-                        <button onClick={() => setDeleteStudent(s)} style={{ width: 30, height: 30, border: "1px solid #FCA5A5", borderRadius: 8, background: "#FFF5F5", color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        <button onClick={() => setDeleteStudent(s)} style={{ width: 28, height: 28, border: "1px solid #FCA5A5", borderRadius: 7, background: "#FFF5F5", color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                         </button>
                       </div>
                     </td>
