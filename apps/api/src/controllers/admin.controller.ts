@@ -179,6 +179,18 @@ export async function deleteStudent(req: Request, res: Response): Promise<void> 
   res.json({ message: "Student deleted" });
 }
 
+export async function bulkDeleteStudents(req: Request, res: Response): Promise<void> {
+  const { ids } = req.body as { ids: string[] };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ message: "ids array is required" });
+    return;
+  }
+  await prisma.testResult.deleteMany({ where: { studentId: { in: ids } } });
+  await prisma.attendance.deleteMany({ where: { studentId: { in: ids } } });
+  const { count } = await prisma.student.deleteMany({ where: { id: { in: ids } } });
+  res.json({ message: `Deleted ${count} students`, count });
+}
+
 export async function dateAttendance(req: Request, res: Response): Promise<void> {
   const date = str(req.query["date"]);
   const batch = str(req.query["batch"]);

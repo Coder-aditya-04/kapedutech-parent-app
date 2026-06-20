@@ -4,6 +4,7 @@ import {
   createStudent,
   updateStudent,
   deleteStudent,
+  bulkDeleteStudents,
   todayAttendance,
   batchAttendance,
   dateAttendance,
@@ -27,6 +28,7 @@ router.get("/students", listStudents);
 router.post("/students", createStudent);
 router.post("/students/import", importStudents);
 router.put("/students/:id", updateStudent);
+router.post("/students/bulk-delete", bulkDeleteStudents);
 router.delete("/students/:id", deleteStudent);
 
 // Attendance

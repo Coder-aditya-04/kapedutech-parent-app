@@ -108,6 +108,9 @@ export default function StudentsPage() {
   const [showImport, setShowImport] = useState(false);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = useCallback(async (q?: string) => {
     try {
@@ -123,6 +126,7 @@ export default function StudentsPage() {
       setStudents(s);
       setBatches(b);
       setForm(f => ({ ...f, batch: f.batch || b[0]?.name || "" }));
+      setSelected(new Set());
     } catch {}
     setLoading(false);
   }, [center]);
@@ -189,6 +193,37 @@ export default function StudentsPage() {
     setDeleting(false);
   }
 
+  async function handleBulkDelete() {
+    if (selected.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/admin/students/bulk-delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      });
+      const d = await res.json();
+      if (res.ok) { showToast(`Deleted ${d.count} student${d.count !== 1 ? "s" : ""}`, false); setShowBulkDelete(false); load(); }
+      else { showToast(d.message ?? "Failed", false); }
+    } catch { showToast("Network error", false); }
+    setBulkDeleting(false);
+  }
+
+  const allSelected = students.length > 0 && students.every(s => selected.has(s.id));
+  const someSelected = selected.size > 0;
+
+  function toggleAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(students.map(s => s.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -240,7 +275,13 @@ export default function StudentsPage() {
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Students</h1>
           <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14, margin: "4px 0 0" }}>{loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""}${center !== "All" ? ` · ${center}` : ""}`}</p>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {someSelected && (
+            <button onClick={() => setShowBulkDelete(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "1px solid #FCA5A5", borderRadius: 100, background: "#FFF5F5", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              Delete Selected ({selected.size})
+            </button>
+          )}
           <button onClick={() => exportCSV(students)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "1px solid var(--admin-card-border)", borderRadius: 100, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export CSV
@@ -276,6 +317,10 @@ export default function StudentsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
+                <th style={{ ...S.th, width: 40, paddingRight: 0 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                    style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
+                </th>
                 {["Name", "Enrollment No", "Batch", "Center", "Parent Name", "Parent Phone", "Parent Email", "Actions"].map(h => (
                   <th key={h} style={S.th}>{h}</th>
                 ))}
@@ -283,13 +328,18 @@ export default function StudentsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading...</td></tr>
+                <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading...</td></tr>
               ) : students.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No students found</td></tr>
+                <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No students found</td></tr>
               ) : students.map(s => {
                 const cs = centerStyle(s.center);
+                const isChecked = selected.has(s.id);
                 return (
-                  <tr key={s.id} style={S.row}>
+                  <tr key={s.id} style={{ ...S.row, background: isChecked ? "rgba(79,70,229,0.04)" : undefined }}>
+                    <td style={{ ...S.td, width: 40, paddingRight: 0 }}>
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleOne(s.id)}
+                        style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--admin-accent)" }} />
+                    </td>
                     <td style={{ ...S.td, fontWeight: 600, color: "var(--admin-text)" }}>{s.name}</td>
                     <td style={{ ...S.td, color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 13 }}>{s.enrollmentNo}</td>
                     <td style={S.td}>
@@ -427,6 +477,27 @@ export default function StudentsPage() {
               <button onClick={handleImport} disabled={importing || importRows.length === 0}
                 style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: importing || !importRows.length ? "#9CA3AF" : "#059669", color: "#fff", fontSize: 14, fontWeight: 700, cursor: importing || !importRows.length ? "not-allowed" : "pointer" }}>
                 {importing ? "Importing..." : `Import ${importRows.length} Students`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Modal */}
+      {showBulkDelete && (
+        <div style={S.overlay}>
+          <div style={{ ...S.modal, maxWidth: 420 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Delete {selected.size} Student{selected.size !== 1 ? "s" : ""}?</h2>
+              <button onClick={() => setShowBulkDelete(false)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "var(--admin-text-muted)" }}>✕</button>
+            </div>
+            <p style={{ color: "var(--admin-text-muted)", fontSize: 14, margin: "0 0 24px 0", lineHeight: 1.6 }}>
+              This will permanently delete <strong style={{ color: "var(--admin-text)" }}>{selected.size} student{selected.size !== 1 ? "s" : ""}</strong> and all their attendance records. This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowBulkDelete(false)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleBulkDelete} disabled={bulkDeleting} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: bulkDeleting ? "#FCA5A5" : "#DC2626", color: "#fff", fontSize: 14, fontWeight: 700, cursor: bulkDeleting ? "not-allowed" : "pointer" }}>
+                {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Student${selected.size !== 1 ? "s" : ""}`}
               </button>
             </div>
           </div>
