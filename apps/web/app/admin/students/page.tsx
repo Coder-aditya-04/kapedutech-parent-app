@@ -141,7 +141,7 @@ export default function StudentsPage() {
         fetch(q
           ? `/api/admin/students/search?q=${encodeURIComponent(q)}${cp ? `&${cp}` : ""}`
           : `/api/admin/students${cp ? `?${cp}` : ""}`),
-        fetch("/api/admin/batches"),
+        fetch(`/api/admin/batches${cp ? `?${cp}` : ""}`),
       ]);
       const s = sRes.ok ? await sRes.json() : [];
       const b: Batch[] = bRes.ok ? await bRes.json() : [];
