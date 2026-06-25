@@ -140,13 +140,16 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // If an email is provided, make sure it isn't already taken by a different parent
+  // If an email is provided, make sure it isn't already taken by a DIFFERENT parent
+  // Compare against the student's actual current parent (not by new phone, which may have changed)
   if (parentEmail) {
     const emailOwner = await prisma.parent.findUnique({ where: { email: parentEmail } });
-    const currentParent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
-    if (emailOwner && emailOwner.id !== currentParent?.id) {
-      res.status(409).json({ message: `Email ${parentEmail} is already linked to another parent account.` });
-      return;
+    if (emailOwner) {
+      const student = await prisma.student.findUnique({ where: { id }, select: { parentId: true } });
+      if (emailOwner.id !== student?.parentId) {
+        res.status(409).json({ message: `Email ${parentEmail} is already linked to another parent account.` });
+        return;
+      }
     }
   }
 
