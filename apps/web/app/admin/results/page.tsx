@@ -76,56 +76,118 @@ function scoreColor(pct: number) {
   return "#EF4444";
 }
 
-function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void }) {
+function AnalyticsView({ test, center, onBack }: { test: TestMeta; center: string; onBack: () => void }) {
   const [results, setResults] = useState<TestResultRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterBatch, setFilterBatch] = useState("All");
+  const [editing, setEditing] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [editToast, setEditToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  function showEditToast(msg: string, ok: boolean) { setEditToast({ msg, ok }); setTimeout(() => setEditToast(null), 3000); }
 
   useEffect(() => {
-    async function load() {
-      const rRes = await fetch(`/api/admin/results/test/${encodeURIComponent(test.testName)}?date=${test.testDate}`);
-      if (rRes.ok) setResults(await rRes.json());
-      setLoading(false);
-    }
-    load();
-  }, [test]);
+    setLoading(true);
+    setFilterBatch("All");
+    const cp = center !== "All" ? `&center=${encodeURIComponent(center)}` : "";
+    fetch(`/api/admin/results/test/${encodeURIComponent(test.testName)}?date=${test.testDate}${cp}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: TestResultRow[]) => { setResults(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [test.testName, test.testDate, center]);
+
+  async function handleRemoveStudent(id: string, name: string) {
+    setRemovingId(id);
+    try {
+      const res = await fetch(`/api/admin/results/entry/${id}`, { method: "DELETE" });
+      if (res.ok) { setResults(prev => prev.filter(r => r.id !== id)); showEditToast(`Removed ${name}`, true); }
+      else showEditToast("Failed to remove", false);
+    } catch { showEditToast("Network error", false); }
+    setRemovingId(null);
+  }
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>Loading analytics...</div>;
   if (!results.length) return <div style={{ padding: 40, textAlign: "center", color: "var(--admin-text-faint)" }}>No results found.</div>;
 
-  const topper = results[0];
-  const avg = results.reduce((a, r) => a + r.percentage, 0) / results.length;
-  const lowest = results[results.length - 1];
-  const subjects = Object.keys(results[0]?.scores ?? {});
-  const SUBJECT_COLORS = ["#6366F1", "#059669", "#F59E0B", "#EF4444"];
+  const batches = ["All", ...Array.from(new Set(results.map(r => r.student.batch))).sort()];
+  const filteredResults = filterBatch === "All" ? results : results.filter(r => r.student.batch === filterBatch);
+
+  // Subjects: union of all subjects that appear in filtered results
+  const subjectSet = new Set<string>();
+  filteredResults.forEach(r => Object.keys(r.scores).forEach(s => subjectSet.add(s)));
+  const subjects = Array.from(subjectSet);
+
+  const SUBJECT_COLORS = ["#6366F1", "#059669", "#F59E0B", "#EF4444", "#EC4899"];
   const subjectAvgs = subjects.map((s, i) => ({
     subject: s,
-    avg: Math.round(results.reduce((a, r) => a + (r.scores[s] ?? 0), 0) / results.length),
-    fill: SUBJECT_COLORS[i % 4],
+    avg: Math.round(filteredResults.reduce((a, r) => a + ((r.scores as Record<string, number>)[s] ?? 0), 0) / filteredResults.length),
+    fill: SUBJECT_COLORS[i % 5],
   }));
+
+  const sortedResults = [...filteredResults].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+  const topper = sortedResults[0];
+  const lowest = sortedResults[sortedResults.length - 1];
+  const avg = filteredResults.reduce((a, r) => a + r.percentage, 0) / filteredResults.length;
+  const avgTotal = Math.round(filteredResults.reduce((a, r) => a + r.total, 0) / filteredResults.length);
 
   const buckets = ["0-40", "40-50", "50-60", "60-70", "70-80", "80+"];
   const distData = buckets.map(b => {
     const [lo, hi] = b === "80+" ? [80, 101] : b.split("-").map(Number);
-    return { range: b, count: results.filter(r => r.percentage >= lo && r.percentage < hi).length };
+    return { range: b, count: filteredResults.filter(r => r.percentage >= lo && r.percentage < hi).length };
   });
 
   const statCards = [
     { label: "Topper", value: topper.student.name.split(" ")[0], sub: `${topper.percentage.toFixed(1)}%`, color: "#F59E0B" },
-    { label: "Class Average", value: `${avg.toFixed(1)}%`, sub: `${Math.round(avg / 100 * (topper.totalInBatch ?? 1) * 16)} avg marks`, color: "#6366F1" },
+    { label: "Class Average", value: `${avg.toFixed(1)}%`, sub: `${avgTotal} avg marks`, color: "#6366F1" },
     { label: "Lowest Score", value: lowest.student.name.split(" ")[0], sub: `${lowest.percentage.toFixed(1)}%`, color: "#EF4444" },
-    { label: "Total Students", value: String(results.length), sub: `${results.filter(r => r.percentage >= 60).length} above 60%`, color: "#059669" },
+    { label: "Total Students", value: String(filteredResults.length), sub: `${filteredResults.filter(r => r.percentage >= 60).length} above 60%`, color: "#059669" },
   ];
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+      {editToast && (
+        <div style={{
+          position: "fixed", top: 24, right: 24, zIndex: 200,
+          background: "var(--admin-card-bg)",
+          border: `1px solid ${editToast.ok ? "rgba(5,150,105,0.3)" : "rgba(220,38,38,0.3)"}`,
+          color: editToast.ok ? "#059669" : "#EF4444",
+          padding: "12px 20px", borderRadius: 12, fontWeight: 600, fontSize: 14,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.2)",
+        }}>
+          {editToast.ok ? "✓" : "✕"} {editToast.msg}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <button onClick={onBack} style={{ border: "1px solid var(--admin-card-border)", background: "var(--admin-input-bg)", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "var(--admin-text)", fontWeight: 600 }}>← Back</button>
-        <div>
+        <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--admin-text)" }}>{test.testName}</h2>
           <p style={{ margin: 0, fontSize: 12, color: "var(--admin-text-faint)" }}>
             {new Date(test.testDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {results.length} students
           </p>
         </div>
+        {batches.length > 2 && (
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {batches.map(b => (
+              <button key={b} onClick={() => setFilterBatch(b)} style={{
+                padding: "4px 12px", borderRadius: 100, border: "1px solid",
+                borderColor: filterBatch === b ? "var(--admin-accent)" : "var(--admin-card-border)",
+                background: filterBatch === b ? "var(--admin-accent)" : "var(--admin-input-bg)",
+                color: filterBatch === b ? "#fff" : "var(--admin-text-muted)",
+                fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+              }}>{b === "All" ? "All Batches" : b}</button>
+            ))}
+          </div>
+        )}
+        <button
+          onClick={() => setEditing(e => !e)}
+          style={{
+            border: `1px solid ${editing ? "#DC2626" : "var(--admin-card-border)"}`,
+            background: editing ? "rgba(220,38,38,0.1)" : "var(--admin-input-bg)",
+            borderRadius: 8, padding: "6px 14px", cursor: "pointer",
+            fontSize: 13, color: editing ? "#DC2626" : "var(--admin-text-muted)", fontWeight: 600,
+          }}
+        >{editing ? "✓ Done" : "✎ Edit"}</button>
       </div>
 
       {/* Summary stat cards */}
@@ -148,10 +210,7 @@ function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void })
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
               <XAxis dataKey="range" tick={{ fontSize: 11, fill: "var(--admin-text-faint)" as string }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--admin-text-faint)" as string }} />
-              <Tooltip
-                contentStyle={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, color: "var(--admin-text)" }}
-                cursor={{ fill: "rgba(128,128,128,0.08)" }}
-              />
+              <Tooltip contentStyle={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, color: "var(--admin-text)" }} cursor={{ fill: "rgba(128,128,128,0.08)" }} />
               <Bar dataKey="count" name="Students" fill="#6366F1" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -165,10 +224,7 @@ function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void })
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
               <XAxis dataKey="subject" tick={{ fontSize: 11, fill: "var(--admin-text-faint)" as string }} />
               <YAxis tick={{ fontSize: 11, fill: "var(--admin-text-faint)" as string }} />
-              <Tooltip
-                contentStyle={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, color: "var(--admin-text)" }}
-                cursor={{ fill: "rgba(128,128,128,0.08)" }}
-              />
+              <Tooltip contentStyle={{ background: "var(--admin-card-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 10, color: "var(--admin-text)" }} cursor={{ fill: "rgba(128,128,128,0.08)" }} />
               <Bar dataKey="avg" name="Avg Marks" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -177,29 +233,47 @@ function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void })
 
       {/* Leaderboard */}
       <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: 20, marginBottom: 20 }}>
-        <p style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Full Leaderboard</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+            Full Leaderboard {filterBatch !== "All" && <span style={{ color: "var(--admin-accent)", fontWeight: 400, fontSize: 12 }}>— {filterBatch}</span>}
+          </p>
+          {editing && <p style={{ margin: 0, fontSize: 12, color: "#DC2626", fontStyle: "italic" }}>Click × to remove a student from this result</p>}
+        </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--admin-input-bg)" }}>
+                {editing && <th style={{ padding: "8px 6px", width: 28 }}></th>}
                 {["Rank", "Name", "Batch", "Roll No", ...subjects, "Total", "%", "Percentile"].map(h => (
                   <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "var(--admin-text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {results.map((r, i) => (
+              {sortedResults.map((r, i) => (
                 <tr key={r.id} style={{ borderTop: "1px solid var(--admin-card-border)", background: i < 3 ? `${RANK_COLORS[i]}08` : undefined }}>
+                  {editing && (
+                    <td style={{ padding: "6px 6px" }}>
+                      <button
+                        onClick={() => handleRemoveStudent(r.id, r.student.name)}
+                        disabled={removingId === r.id}
+                        style={{ border: "none", background: "rgba(220,38,38,0.12)", color: "#EF4444", borderRadius: 4, width: 22, height: 22, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: "22px", textAlign: "center" as const }}
+                        title="Remove from results"
+                      >{removingId === r.id ? "…" : "×"}</button>
+                    </td>
+                  )}
                   <td style={{ padding: "10px 12px" }}>
                     <span style={{ fontWeight: 800, color: i < 3 ? RANK_COLORS[i] : "var(--admin-text-muted)", fontSize: i < 3 ? 15 : 13 }}>
                       {i < 3 ? ["🥇", "🥈", "🥉"][i] : `#${r.rank}`}
                     </span>
                   </td>
                   <td style={{ padding: "10px 12px", fontWeight: 600, color: "var(--admin-text)", whiteSpace: "nowrap" }}>{r.student.name}</td>
-                  <td style={{ padding: "10px 12px", color: "var(--admin-text-muted)", fontSize: 12 }}>{r.student.batch}</td>
+                  <td style={{ padding: "10px 12px", color: "var(--admin-text-muted)", fontSize: 12, whiteSpace: "nowrap" }}>{r.student.batch}</td>
                   <td style={{ padding: "10px 12px", color: "var(--admin-text-muted)", fontFamily: "monospace", fontSize: 12 }}>{r.student.enrollmentNo}</td>
                   {subjects.map(s => (
-                    <td key={s} style={{ padding: "10px 12px", textAlign: "center", color: "var(--admin-text)" }}>{r.scores[s] ?? "-"}</td>
+                    <td key={s} style={{ padding: "10px 12px", textAlign: "center", color: "var(--admin-text)" }}>
+                      {(r.scores as Record<string, number | undefined>)[s] !== undefined ? (r.scores as Record<string, number | undefined>)[s] : "-"}
+                    </td>
                   ))}
                   <td style={{ padding: "10px 12px", fontWeight: 700, color: "var(--admin-text)" }}>{r.total}</td>
                   <td style={{ padding: "10px 12px" }}>
@@ -216,11 +290,11 @@ function AnalyticsView({ test, onBack }: { test: TestMeta; onBack: () => void })
       </div>
 
       {/* Below 40% warning */}
-      {results.filter(r => r.percentage < 40).length > 0 && (
+      {filteredResults.filter(r => r.percentage < 40).length > 0 && (
         <div style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)", borderRadius: 14, padding: 16, marginBottom: 20 }}>
           <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#EF4444" }}>⚠️ Students Below 40% — Need Attention</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {results.filter(r => r.percentage < 40).map(r => (
+            {filteredResults.filter(r => r.percentage < 40).map(r => (
               <span key={r.id} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 8, padding: "4px 12px", fontSize: 12, color: "#EF4444" }}>
                 {r.student.name} — {r.percentage.toFixed(1)}%
               </span>
@@ -338,7 +412,10 @@ function ResultsPageInner() {
     }).filter(r => r.name && r.rank > 0);
     setParsed(parsedRows);
     const matched = parsedRows.map(r => {
-      const student = students.find(s => s.name.toLowerCase().trim() === r.name.toLowerCase().trim() || (r.enrollmentNo && s.enrollmentNo === r.enrollmentNo));
+      // Enrollment number takes strict priority — name match is only a fallback when no enrollment is present
+      const student = r.enrollmentNo
+        ? (students.find(s => s.enrollmentNo === r.enrollmentNo) ?? students.find(s => s.name.toLowerCase().trim() === r.name.toLowerCase().trim()))
+        : students.find(s => s.name.toLowerCase().trim() === r.name.toLowerCase().trim());
       return student ? { studentId: student.id, name: r.name, rank: r.rank, total: r.total, percentage: r.percentage, scores: r.scores } : null;
     }).filter(Boolean) as typeof preview;
     setPreview(matched);
@@ -393,7 +470,7 @@ function ResultsPageInner() {
   if (selectedTest) return (
     <div className="admin-page">
       {toastEl}
-      <AnalyticsView test={selectedTest} onBack={() => setSelectedTest(null)} />
+      <AnalyticsView test={selectedTest} center={center} onBack={() => setSelectedTest(null)} />
     </div>
   );
 

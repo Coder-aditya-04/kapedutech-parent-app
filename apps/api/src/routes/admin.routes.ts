@@ -13,7 +13,7 @@ import {
   importStudents,
 } from "../controllers/admin.controller.js";
 import { listBatches, createBatch, deleteBatch, batchAnalytics, batchDetail } from "../controllers/batch.controller.js";
-import { uploadResults, listTests, getTestResults, deleteTest } from "../controllers/result.controller.js";
+import { uploadResults, listTests, getTestResults, deleteTest, deleteResultEntry } from "../controllers/result.controller.js";
 import { requireAdminSecret } from "../middleware/adminAuth.js";
 
 const router = Router();
@@ -48,5 +48,6 @@ router.post("/results", uploadResults);
 router.get("/results/tests", listTests);
 router.get("/results/test/:testName", getTestResults);
 router.delete("/results/test/:testName", deleteTest);
+router.delete("/results/entry/:id", deleteResultEntry);
 
 export default router;

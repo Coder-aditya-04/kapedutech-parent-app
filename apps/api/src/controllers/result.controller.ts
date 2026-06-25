@@ -116,6 +116,17 @@ export async function getTestResults(req: Request, res: Response): Promise<void>
   res.json(results);
 }
 
+// Admin: delete a single result entry by its DB id
+export async function deleteResultEntry(req: Request, res: Response): Promise<void> {
+  const id = req.params["id"] as string;
+  try {
+    await prisma.testResult.delete({ where: { id } });
+    res.json({ message: "Entry removed" });
+  } catch {
+    res.status(404).json({ message: "Result entry not found" });
+  }
+}
+
 // Parent/mobile: get results for a specific student (with class averages per subject)
 export async function getStudentResults(req: Request, res: Response): Promise<void> {
   const studentId = req.params["studentId"] as string;
