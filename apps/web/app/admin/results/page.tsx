@@ -332,6 +332,7 @@ function ResultsPageInner() {
   const [uploading, setUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TestMeta | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const load = useCallback(async () => {
     const cp = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
@@ -448,7 +449,7 @@ function ResultsPageInner() {
         }),
       });
       const d = await res.json();
-      if (res.ok) { showToast(d.message, true); setTestName(""); setPasteText(""); setRows([]); setHeaders([]); setPreview([]); setParsed([]); load(); }
+      if (res.ok) { showToast(d.message, true); setTestName(""); setPasteText(""); setRows([]); setHeaders([]); setPreview([]); setParsed([]); setShowUploadModal(false); load(); }
       else showToast(d.message ?? "Upload failed", false);
     } catch { showToast("Network error", false); }
     setUploading(false);
@@ -507,201 +508,221 @@ function ResultsPageInner() {
     return "#F59E0B";
   };
 
+  const uploadForm = (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+        <div>
+          <label style={labelStyle}>Test Name</label>
+          <input value={testName} onChange={e => setTestName(e.target.value)} placeholder="e.g. CRT - 03" style={inp} />
+        </div>
+        <div>
+          <label style={labelStyle}>Test Date</label>
+          <input type="date" value={testDate} onChange={e => setTestDate(e.target.value)} style={inp} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 0, marginBottom: 16, border: "1px solid var(--admin-card-border)", borderRadius: 10, overflow: "hidden" }}>
+        {(["paste", "csv"] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: "10px", border: "none",
+            background: tab === t ? "var(--admin-accent)" : "transparent",
+            color: tab === t ? "#fff" : "var(--admin-text-muted)",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>
+            {t === "paste" ? "📋 Paste from PDF" : "📄 Upload CSV"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "paste" ? (
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Paste result table from PDF</label>
+          <p style={{ fontSize: 12, color: "var(--admin-text-faint)", margin: "0 0 8px" }}>Open PDF → select table → Ctrl+C → paste below</p>
+          <textarea
+            value={pasteText} onChange={e => setPasteText(e.target.value)}
+            placeholder={"Rank\tRoll No\tName\tPhysics\tChemistry\tTotal\n1\t808716513\tPRANAY JAGTAP\t86\t116\t512..."}
+            rows={5}
+            style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 12 }}
+          />
+          <button onClick={handleParsePaste} style={{ marginTop: 8, width: "100%", padding: "10px", background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "var(--admin-text)", cursor: "pointer" }}>
+            Parse Table
+          </button>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Upload CSV file</label>
+          <input type="file" accept=".csv" onChange={handleCSVFile} style={{ ...inp }} />
+        </div>
+      )}
+
+      {headers.length > 0 && (
+        <div style={{ background: "var(--admin-input-bg)", borderRadius: 12, padding: 16, marginBottom: 14, border: "1px solid var(--admin-card-border)" }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 12px" }}>
+            Map Columns <span style={{ color: "var(--admin-text-faint)", fontWeight: 400 }}>({rows.length} rows)</span>
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {([
+              { label: "Name column *", key: "nameCol" },
+              { label: "Rank column *", key: "rankCol" },
+              { label: "Roll No column", key: "enrollmentCol" },
+              { label: "Total column *", key: "totalCol" },
+            ] as { label: string; key: keyof typeof mappings }[]).map(f => (
+              <div key={f.key}>
+                <label style={labelStyle}>{f.label}</label>
+                <select value={mappings[f.key] as string} onChange={e => setMappings(m => ({ ...m, [f.key]: e.target.value }))} style={{ ...inp, fontSize: 13 }}>
+                  <option value="">— select —</option>
+                  {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Subjects</p>
+              <button onClick={() => setMappings(m => ({ ...m, subjects: [...m.subjects, { label: "", col: "", max: 100 }] }))} style={{ fontSize: 12, color: "var(--admin-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
+            </div>
+            {mappings.subjects.map((sub, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 76px 28px", gap: 6, marginBottom: 6 }}>
+                <input placeholder="Label (e.g. Physics)" value={sub.label} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], label: e.target.value }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 13 }} />
+                <select value={sub.col} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], col: e.target.value }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 13 }}>
+                  <option value="">— column —</option>
+                  {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <input type="number" placeholder="Max" min={1} value={sub.max || ""} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], max: parseInt(e.target.value) || 100 }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 13 }} />
+                <button onClick={() => setMappings(m => ({ ...m, subjects: m.subjects.filter((_, j) => j !== i) }))} style={{ border: "none", background: "rgba(220,38,38,0.15)", color: "#EF4444", borderRadius: 6, cursor: "pointer" }}>✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {headers.length > 0 && (
+        <button onClick={buildPreview} style={{ width: "100%", padding: "10px", border: "1px solid var(--admin-accent)", borderRadius: 10, background: "rgba(59,130,246,0.08)", color: "var(--admin-accent)", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 12 }}>
+          Match Students &amp; Preview
+        </button>
+      )}
+
+      {preview.length > 0 && (
+        <>
+          <div style={{ background: "rgba(5,150,105,0.1)", border: "1px solid rgba(5,150,105,0.25)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+            <p style={{ margin: "0 0 6px", fontSize: 13, color: "#059669", fontWeight: 600 }}>✓ {preview.length} matched ({parsed.length - preview.length} unmatched)</p>
+            <div style={{ maxHeight: 120, overflowY: "auto" }}>
+              {preview.slice(0, 8).map((r, i) => <p key={i} style={{ margin: "2px 0", fontSize: 12, color: "var(--admin-text-muted)" }}>#{r.rank} {r.name} — {r.total} marks</p>)}
+              {preview.length > 8 && <p style={{ fontSize: 12, color: "var(--admin-text-faint)", margin: "4px 0 0" }}>...and {preview.length - 8} more</p>}
+            </div>
+          </div>
+          <button onClick={handleUpload} disabled={uploading} style={{ width: "100%", padding: "12px", border: "none", borderRadius: 10, background: uploading ? "var(--admin-text-faint)" : "var(--admin-accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: uploading ? "not-allowed" : "pointer" }}>
+            {uploading ? "Uploading..." : `Upload Results for ${preview.length} Students`}
+          </button>
+        </>
+      )}
+    </>
+  );
+
+  const uploadModal = showUploadModal && (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, backdropFilter: "blur(4px)", padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) setShowUploadModal(false); }}
+    >
+      <div style={{ background: "var(--admin-card-bg)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 64px rgba(0,0,0,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--admin-text)" }}>Upload New Result</h2>
+          <button onClick={() => setShowUploadModal(false)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "var(--admin-text-muted)", fontSize: 16, lineHeight: "32px" }}>✕</button>
+        </div>
+        {uploadForm}
+      </div>
+    </div>
+  );
+
   return (
     <div className="admin-page">
       {toastEl}
       {deleteModal}
+      {uploadModal}
 
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Results</h1>
-        <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14 }}>Upload test results and view per-test analytics</p>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 390px", gap: 24, alignItems: "start" }}>
-
-        {/* ── LEFT: Uploaded tests grid ───────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Uploaded Tests</span>
-            {tests.length > 0 && (
-              <span style={{ background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 100, padding: "2px 9px", fontSize: 11, color: "var(--admin-text-faint)", fontWeight: 600 }}>
-                {tests.length}
-              </span>
-            )}
-            <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
-              {CENTERS.map(c => (
-                <button key={c} onClick={() => setCenter(c)} style={{
-                  padding: "4px 12px", borderRadius: 100, border: "1px solid",
-                  borderColor: center === c ? "var(--admin-accent)" : "var(--admin-card-border)",
-                  background: center === c ? "var(--admin-accent)" : "var(--admin-input-bg)",
-                  color: center === c ? "#fff" : "var(--admin-text-muted)",
-                  fontSize: 11, fontWeight: 600, cursor: "pointer",
-                }}>{c}</button>
-              ))}
-            </div>
-          </div>
-
-          {loading ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} style={{ background: "var(--admin-card-bg)", borderRadius: 14, border: "1px solid var(--admin-card-border)", height: 140, opacity: 0.35 }} />
-              ))}
-            </div>
-          ) : tests.length === 0 ? (
-            <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: "52px 24px", textAlign: "center" }}>
-              <p style={{ fontSize: 40, margin: "0 0 10px" }}>📋</p>
-              <p style={{ margin: 0, fontWeight: 700, color: "var(--admin-text)", fontSize: 15 }}>No tests uploaded yet</p>
-              <p style={{ margin: "5px 0 0", color: "var(--admin-text-faint)", fontSize: 13 }}>Use the upload form on the right to add your first result</p>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              {tests.map((t, i) => {
-                const accent = testAccentColor(t.testName);
-                const fmtDate = new Date(t.testDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-                return (
-                  <div key={i} style={{ background: "var(--admin-card-bg)", borderRadius: 14, border: "1px solid var(--admin-card-border)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                    <div style={{ height: 4, background: `linear-gradient(90deg, ${accent}, ${accent}99)` }} />
-                    <div style={{ padding: "14px 14px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--admin-text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.testName}</p>
-                          <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--admin-text-faint)" }}>{fmtDate}</p>
-                        </div>
-                        <button
-                          onClick={() => setDeleteTarget(t)}
-                          style={{ border: "none", background: "rgba(220,38,38,0.07)", color: "#EF4444", borderRadius: 7, width: 26, height: 26, cursor: "pointer", fontSize: 12, flexShrink: 0, marginLeft: 6, lineHeight: "26px", textAlign: "center" as const }}
-                          title="Delete test"
-                        >🗑</button>
-                      </div>
-                      <span style={{ display: "inline-block", background: `${accent}18`, color: accent, borderRadius: 100, padding: "2px 9px", fontSize: 11, fontWeight: 700, marginBottom: 12, alignSelf: "flex-start" }}>
-                        {t.count} students
-                      </span>
-                      <button
-                        onClick={() => setSelectedTest(t)}
-                        style={{ width: "100%", padding: "7px 10px", border: "none", borderRadius: 8, background: accent, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", marginTop: "auto" }}
-                      >
-                        View Analytics →
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Results</h1>
+          <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 14 }}>Upload test results and view per-test analytics</p>
         </div>
+        <button
+          onClick={() => setShowUploadModal(true)}
+          style={{ padding: "10px 22px", background: "var(--admin-accent)", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+        >
+          + Upload Result
+        </button>
+      </div>
 
-        {/* ── RIGHT: Upload form ───────────────────────────── */}
-        <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: 22, position: "sticky", top: 24 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>Upload New Result</h2>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <div>
-              <label style={labelStyle}>Test Name</label>
-              <input value={testName} onChange={e => setTestName(e.target.value)} placeholder="e.g. CRT - 03" style={inp} />
-            </div>
-            <div>
-              <label style={labelStyle}>Test Date</label>
-              <input type="date" value={testDate} onChange={e => setTestDate(e.target.value)} style={inp} />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 0, marginBottom: 14, border: "1px solid var(--admin-card-border)", borderRadius: 10, overflow: "hidden" }}>
-            {(["paste", "csv"] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
-                flex: 1, padding: "9px", border: "none",
-                background: tab === t ? "var(--admin-accent)" : "transparent",
-                color: tab === t ? "#fff" : "var(--admin-text-muted)",
-                fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}>
-                {t === "paste" ? "📋 Paste from PDF" : "📄 Upload CSV"}
-              </button>
-            ))}
-          </div>
-
-          {tab === "paste" ? (
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Paste result table from PDF</label>
-              <p style={{ fontSize: 11, color: "var(--admin-text-faint)", margin: "0 0 6px" }}>Open PDF → select table → Ctrl+C → paste below</p>
-              <textarea
-                value={pasteText} onChange={e => setPasteText(e.target.value)}
-                placeholder={"Rank\tRoll No\tName\tPhysics\tChemistry\tTotal\n1\t808716513\tPRANAY JAGTAP\t86\t116\t512..."}
-                rows={5}
-                style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 11 }}
-              />
-              <button onClick={handleParsePaste} style={{ marginTop: 8, width: "100%", padding: "9px", background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "var(--admin-text)", cursor: "pointer" }}>
-                Parse Table
-              </button>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Upload CSV file</label>
-              <input type="file" accept=".csv" onChange={handleCSVFile} style={{ ...inp }} />
-            </div>
-          )}
-
-          {headers.length > 0 && (
-            <div style={{ background: "var(--admin-input-bg)", borderRadius: 12, padding: 14, marginBottom: 12, border: "1px solid var(--admin-card-border)" }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px" }}>
-                Map Columns <span style={{ color: "var(--admin-text-faint)", fontWeight: 400 }}>({rows.length} rows)</span>
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {([
-                  { label: "Name column *", key: "nameCol" },
-                  { label: "Rank column *", key: "rankCol" },
-                  { label: "Roll No column", key: "enrollmentCol" },
-                  { label: "Total column *", key: "totalCol" },
-                ] as { label: string; key: keyof typeof mappings }[]).map(f => (
-                  <div key={f.key}>
-                    <label style={labelStyle}>{f.label}</label>
-                    <select value={mappings[f.key] as string} onChange={e => setMappings(m => ({ ...m, [f.key]: e.target.value }))} style={{ ...inp, fontSize: 12 }}>
-                      <option value="">— select —</option>
-                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Subjects</p>
-                  <button onClick={() => setMappings(m => ({ ...m, subjects: [...m.subjects, { label: "", col: "", max: 100 }] }))} style={{ fontSize: 12, color: "var(--admin-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
-                </div>
-                {mappings.subjects.map((sub, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 76px 24px", gap: 5, marginBottom: 5 }}>
-                    <input placeholder="Label" value={sub.label} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], label: e.target.value }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 12 }} />
-                    <select value={sub.col} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], col: e.target.value }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 12 }}>
-                      <option value="">— col —</option>
-                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <input type="number" placeholder="Max" min={1} value={sub.max || ""} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], max: parseInt(e.target.value) || 100 }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 12 }} />
-                    <button onClick={() => setMappings(m => ({ ...m, subjects: m.subjects.filter((_, j) => j !== i) }))} style={{ border: "none", background: "rgba(220,38,38,0.15)", color: "#EF4444", borderRadius: 6, cursor: "pointer" }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {headers.length > 0 && (
-            <button onClick={buildPreview} style={{ width: "100%", padding: "9px", border: "1px solid var(--admin-accent)", borderRadius: 10, background: "rgba(59,130,246,0.08)", color: "var(--admin-accent)", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>
-              Match Students &amp; Preview
-            </button>
-          )}
-
-          {preview.length > 0 && (
-            <>
-              <div style={{ background: "rgba(5,150,105,0.1)", border: "1px solid rgba(5,150,105,0.25)", borderRadius: 10, padding: 10, marginBottom: 12 }}>
-                <p style={{ margin: "0 0 4px", fontSize: 13, color: "#059669", fontWeight: 600 }}>✓ {preview.length} matched ({parsed.length - preview.length} unmatched)</p>
-                <div style={{ maxHeight: 100, overflowY: "auto" }}>
-                  {preview.slice(0, 6).map((r, i) => <p key={i} style={{ margin: "2px 0", fontSize: 11, color: "var(--admin-text-muted)" }}>#{r.rank} {r.name} — {r.total} marks</p>)}
-                  {preview.length > 6 && <p style={{ fontSize: 11, color: "var(--admin-text-faint)", margin: "3px 0 0" }}>...and {preview.length - 6} more</p>}
-                </div>
-              </div>
-              <button onClick={handleUpload} disabled={uploading} style={{ width: "100%", padding: "11px", border: "none", borderRadius: 10, background: uploading ? "var(--admin-text-faint)" : "var(--admin-accent)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: uploading ? "not-allowed" : "pointer" }}>
-                {uploading ? "Uploading..." : `Upload ${preview.length} Results`}
-              </button>
-            </>
-          )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Uploaded Tests</span>
+        {tests.length > 0 && (
+          <span style={{ background: "var(--admin-input-bg)", border: "1px solid var(--admin-card-border)", borderRadius: 100, padding: "2px 9px", fontSize: 11, color: "var(--admin-text-faint)", fontWeight: 600 }}>
+            {tests.length}
+          </span>
+        )}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
+          {CENTERS.map(c => (
+            <button key={c} onClick={() => setCenter(c)} style={{
+              padding: "4px 12px", borderRadius: 100, border: "1px solid",
+              borderColor: center === c ? "var(--admin-accent)" : "var(--admin-card-border)",
+              background: center === c ? "var(--admin-accent)" : "var(--admin-input-bg)",
+              color: center === c ? "#fff" : "var(--admin-text-muted)",
+              fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}>{c}</button>
+          ))}
         </div>
       </div>
+
+      {loading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+            <div key={i} style={{ background: "var(--admin-card-bg)", borderRadius: 14, border: "1px solid var(--admin-card-border)", height: 140, opacity: 0.35 }} />
+          ))}
+        </div>
+      ) : tests.length === 0 ? (
+        <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: "64px 24px", textAlign: "center" }}>
+          <p style={{ fontSize: 40, margin: "0 0 10px" }}>📋</p>
+          <p style={{ margin: 0, fontWeight: 700, color: "var(--admin-text)", fontSize: 15 }}>No tests uploaded yet</p>
+          <p style={{ margin: "5px 0 16px", color: "var(--admin-text-faint)", fontSize: 13 }}>Click the button below to upload your first result</p>
+          <button onClick={() => setShowUploadModal(true)} style={{ padding: "10px 22px", background: "var(--admin-accent)", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            + Upload Result
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          {tests.map((t, i) => {
+            const accent = testAccentColor(t.testName);
+            const fmtDate = new Date(t.testDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+            return (
+              <div key={i} style={{ background: "var(--admin-card-bg)", borderRadius: 14, border: "1px solid var(--admin-card-border)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                <div style={{ height: 4, background: `linear-gradient(90deg, ${accent}, ${accent}88)` }} />
+                <div style={{ padding: "14px 14px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--admin-text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.testName}</p>
+                      <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--admin-text-faint)" }}>{fmtDate}</p>
+                    </div>
+                    <button
+                      onClick={() => setDeleteTarget(t)}
+                      style={{ border: "none", background: "rgba(220,38,38,0.07)", color: "#EF4444", borderRadius: 7, width: 26, height: 26, cursor: "pointer", fontSize: 12, flexShrink: 0, marginLeft: 6, lineHeight: "26px", textAlign: "center" as const }}
+                      title="Delete test"
+                    >🗑</button>
+                  </div>
+                  <span style={{ display: "inline-block", background: `${accent}18`, color: accent, borderRadius: 100, padding: "2px 9px", fontSize: 11, fontWeight: 700, marginBottom: 12, alignSelf: "flex-start" }}>
+                    {t.count} students
+                  </span>
+                  <button
+                    onClick={() => setSelectedTest(t)}
+                    style={{ width: "100%", padding: "8px", border: "none", borderRadius: 8, background: accent, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", marginTop: "auto" }}
+                  >
+                    View Analytics →
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
