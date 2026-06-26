@@ -666,7 +666,7 @@ function ResultsPageInner() {
                   <button onClick={() => setMappings(m => ({ ...m, subjects: [...m.subjects, { label: "", col: "", max: 100 }] }))} style={{ fontSize: 12, color: "var(--admin-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
                 </div>
                 {mappings.subjects.map((sub, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 56px 24px", gap: 5, marginBottom: 5 }}>
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 76px 24px", gap: 5, marginBottom: 5 }}>
                     <input placeholder="Label" value={sub.label} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], label: e.target.value }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 12 }} />
                     <select value={sub.col} onChange={e => setMappings(m => { const s = [...m.subjects]; s[i] = { ...s[i], col: e.target.value }; return { ...m, subjects: s }; })} style={{ ...inp, fontSize: 12 }}>
                       <option value="">— col —</option>
