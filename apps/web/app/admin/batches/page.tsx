@@ -94,6 +94,7 @@ export default function BatchesPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetail>>({});
   const [downloadingPTM, setDownloadingPTM] = useState<Record<string, boolean>>({});
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -150,7 +151,7 @@ export default function BatchesPage() {
         body: JSON.stringify({ name: newName.trim(), center: newCenter }),
       });
       const d = await res.json();
-      if (res.ok) { showToast(`"${newName.trim()}" created`, true); setNewName(""); load(); }
+      if (res.ok) { showToast(`"${newName.trim()}" created`, true); setNewName(""); setShowCreateModal(false); load(); }
       else showToast(d.message ?? "Failed", false);
     } catch { showToast("Network error", false); }
     setCreating(false);
@@ -189,6 +190,49 @@ export default function BatchesPage() {
         )}
       </AnimatePresence>
 
+      {/* Create modal */}
+      {showCreateModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, backdropFilter: "blur(4px)", padding: 16 }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCreateModal(false); }}
+        >
+          <div style={{ background: "var(--admin-card-bg)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 24px 64px rgba(0,0,0,0.4)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--admin-text)" }}>Create New Batch</h2>
+              <button onClick={() => setShowCreateModal(false)} style={{ border: "none", background: "var(--admin-input-bg)", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "var(--admin-text-muted)", fontSize: 16, lineHeight: "32px" }}>✕</button>
+            </div>
+            <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Batch Name</label>
+                <input
+                  autoFocus
+                  placeholder="e.g. JEE 2026, NEET Morning, CONQUER+"
+                  value={newName} onChange={e => setNewName(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10, fontSize: 14, outline: "none", background: "var(--admin-input-bg)", color: "var(--admin-text)", boxSizing: "border-box" as const }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Center</label>
+                <select
+                  value={newCenter} onChange={e => setNewCenter(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10, fontSize: 14, background: "var(--admin-input-bg)", color: "var(--admin-text)", outline: "none", cursor: "pointer" }}
+                >
+                  {CENTERS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button type="button" onClick={() => setShowCreateModal(false)} style={{ flex: 1, padding: "11px", border: "1.5px solid var(--admin-card-border)", borderRadius: 10, background: "transparent", color: "var(--admin-text)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={creating || !newName.trim()} style={{ flex: 1, padding: "11px", background: "#08BD80", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: creating || !newName.trim() ? "not-allowed" : "pointer", opacity: creating || !newName.trim() ? 0.6 : 1 }}>
+                  {creating ? "Creating…" : "+ Create Batch"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
@@ -197,50 +241,22 @@ export default function BatchesPage() {
             {batches.length} batch{batches.length !== 1 ? "es" : ""} · Click any card to view students
           </p>
         </div>
-        {/* Center filter */}
-        <select
-          value={filterCenter}
-          onChange={e => setFilterCenter(e.target.value)}
-          style={{
-            padding: "8px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
-            fontSize: 13, background: "var(--admin-input-bg)", color: "var(--admin-text)", outline: "none", cursor: "pointer",
-          }}
-        >
-          <option value="">All Centers</option>
-          {CENTERS.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      {/* Create form */}
-      <div style={{ background: "var(--admin-card-bg)", borderRadius: 16, border: "1px solid var(--admin-card-border)", padding: "18px 22px", marginBottom: 24 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)", margin: "0 0 12px", letterSpacing: "-0.2px" }}>New Batch</h2>
-        <form onSubmit={handleCreate} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            placeholder="e.g. JEE 2026, NEET Morning, CONQUER+"
-            value={newName} onChange={e => setNewName(e.target.value)}
-            style={{
-              flex: 1, minWidth: 200, padding: "9px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
-              fontSize: 13, outline: "none", background: "var(--admin-input-bg)", color: "var(--admin-text)",
-            }}
-          />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <select
-            value={newCenter} onChange={e => setNewCenter(e.target.value)}
-            style={{
-              padding: "9px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10,
-              fontSize: 13, background: "var(--admin-input-bg)", color: "var(--admin-text)", outline: "none", cursor: "pointer",
-            }}
+            value={filterCenter}
+            onChange={e => setFilterCenter(e.target.value)}
+            style={{ padding: "8px 14px", border: "1px solid var(--admin-card-border)", borderRadius: 10, fontSize: 13, background: "var(--admin-input-bg)", color: "var(--admin-text)", outline: "none", cursor: "pointer" }}
           >
+            <option value="">All Centers</option>
             {CENTERS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <button type="submit" disabled={creating || !newName.trim()} style={{
-            padding: "9px 20px", background: "#08BD80", color: "#fff",
-            border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600,
-            cursor: creating || !newName.trim() ? "not-allowed" : "pointer",
-            opacity: creating || !newName.trim() ? 0.55 : 1,
-          }}>
-            {creating ? "Creating…" : "+ Create"}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{ padding: "9px 20px", background: "#08BD80", border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            + Create Batch
           </button>
-        </form>
+        </div>
       </div>
 
       {/* Batch cards */}
