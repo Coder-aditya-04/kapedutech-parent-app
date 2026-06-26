@@ -10,6 +10,7 @@ import {
   dateAttendance,
   searchStudents,
   getStudentAttendanceHistory,
+  getStudentProfile,
   importStudents,
 } from "../controllers/admin.controller.js";
 import { listBatches, createBatch, deleteBatch, batchAnalytics, batchDetail } from "../controllers/batch.controller.js";
@@ -24,6 +25,7 @@ router.use(requireAdminSecret);
 // Students
 router.get("/students/search", searchStudents);
 router.get("/students/:studentId/attendance", getStudentAttendanceHistory);
+router.get("/students/:id/profile", getStudentProfile);
 router.get("/students", listStudents);
 router.post("/students", createStudent);
 router.post("/students/import", importStudents);

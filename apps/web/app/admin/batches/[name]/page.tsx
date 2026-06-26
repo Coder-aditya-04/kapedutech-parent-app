@@ -355,7 +355,6 @@ export default function BatchDetailPage() {
   const [data,    setData]    = useState<BatchDetail|null>(null);
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState("");
-  const [panel,   setPanel]   = useState<StudentData|null>(null);
   const [sortBy,  setSortBy]  = useState<"name"|"attendance"|"score">("attendance");
   const [sortDir, setSortDir] = useState<"asc"|"desc">("desc");
 
@@ -538,7 +537,7 @@ export default function BatchDetailPage() {
               <motion.div key={student.id} variants={card} layout>
                 <SpotlightCard
                   accent={color}
-                  onClick={() => setPanel(student)}
+                  onClick={() => router.push(`/admin/students/${student.id}`)}
                   style={{
                     borderRadius:20,
                     background:"var(--admin-card-bg)",
@@ -630,16 +629,6 @@ export default function BatchDetailPage() {
         </motion.div>
       )}
 
-      {/* Student detail panel */}
-      <AnimatePresence>
-        {panel && (
-          <StudentPanel
-            student={panel}
-            accent={studentColor(panel.name)}
-            onClose={() => setPanel(null)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

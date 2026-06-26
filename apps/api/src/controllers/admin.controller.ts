@@ -223,6 +223,42 @@ export async function dateAttendance(req: Request, res: Response): Promise<void>
   res.json(records);
 }
 
+export async function getStudentProfile(req: Request, res: Response): Promise<void> {
+  const id = req.params["id"] as string;
+  const student = await prisma.student.findUnique({
+    where: { id },
+    include: { parent: { select: { name: true, phone: true, email: true } } },
+  });
+  if (!student) { res.status(404).json({ message: "Student not found" }); return; }
+
+  const [results, attendances] = await Promise.all([
+    prisma.testResult.findMany({ where: { studentId: id }, orderBy: { testDate: "desc" }, take: 30 }),
+    prisma.attendance.findMany({ where: { studentId: id }, orderBy: { markedAt: "desc" }, take: 90 }),
+  ]);
+
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  const batchDates = await prisma.attendance.findMany({
+    where: { student: { batch: student.batch, center: student.center }, date: { gte: sixtyDaysAgo } },
+    select: { date: true },
+    distinct: ["date"],
+  });
+
+  const totalWorkingDays = batchDates.length;
+  const presentDays = attendances.filter(a => a.date >= sixtyDaysAgo).length;
+  const attendancePct = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 0;
+
+  res.json({
+    id: student.id, name: student.name, enrollmentNo: student.enrollmentNo,
+    batch: student.batch, center: student.center, parent: student.parent,
+    attendancePct, presentDays, totalWorkingDays,
+    lastSeen: attendances[0]?.markedAt ?? null,
+    results: results.map(r => ({
+      testName: r.testName, testDate: r.testDate, rank: r.rank, total: r.total,
+      percentage: r.percentage, percentile: r.percentile, scores: r.scores, totalInBatch: r.totalInBatch,
+    })),
+  });
+}
+
 export async function importStudents(req: Request, res: Response): Promise<void> {
   const { rows, center: batchCenter } = req.body as {
     rows?: { name: string; enrollmentNo: string; batch: string; parentName: string; parentPhone: string; parentEmail?: string; center?: string }[];
