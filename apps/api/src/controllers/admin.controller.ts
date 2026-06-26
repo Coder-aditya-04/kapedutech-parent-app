@@ -244,7 +244,8 @@ export async function getStudentProfile(req: Request, res: Response): Promise<vo
   });
 
   const totalWorkingDays = batchDates.length;
-  const presentDays = attendances.filter(a => a.date >= sixtyDaysAgo).length;
+  // Count distinct dates only — a student may have multiple scans in one day
+  const presentDays = new Set(attendances.filter(a => a.date >= sixtyDaysAgo).map(a => a.date)).size;
   const attendancePct = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 0;
 
   res.json({
@@ -254,7 +255,8 @@ export async function getStudentProfile(req: Request, res: Response): Promise<vo
     lastSeen: attendances[0]?.markedAt ?? null,
     results: results.map(r => ({
       testName: r.testName, testDate: r.testDate, rank: r.rank, total: r.total,
-      percentage: r.percentage, percentile: r.percentile, scores: r.scores, totalInBatch: r.totalInBatch,
+      percentage: r.percentage, percentile: r.percentile,
+      scores: r.scores, subjectMaxes: r.subjectMaxes, totalInBatch: r.totalInBatch,
     })),
   });
 }
