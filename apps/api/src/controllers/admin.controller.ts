@@ -231,17 +231,18 @@ export async function getStudentProfile(req: Request, res: Response): Promise<vo
   });
   if (!student) { res.status(404).json({ message: "Student not found" }); return; }
 
-  const [results, attendances] = await Promise.all([
-    prisma.testResult.findMany({ where: { studentId: id }, orderBy: { testDate: "desc" }, take: 30 }),
-    prisma.attendance.findMany({ where: { studentId: id }, orderBy: { markedAt: "desc" }, take: 90 }),
-  ]);
-
   const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
-  const batchDates = await prisma.attendance.findMany({
-    where: { student: { batch: student.batch, center: student.center }, date: { gte: sixtyDaysAgo } },
-    select: { date: true },
-    distinct: ["date"],
-  });
+
+  const [results, attendances, batchDates] = await Promise.all([
+    prisma.testResult.findMany({ where: { studentId: id }, orderBy: { testDate: "desc" }, take: 50 }),
+    // take 200 to cover multiple scans per day across 60+ working days
+    prisma.attendance.findMany({ where: { studentId: id }, orderBy: { markedAt: "desc" }, take: 200 }),
+    prisma.attendance.findMany({
+      where: { student: { batch: student.batch, center: student.center }, date: { gte: sixtyDaysAgo } },
+      select: { date: true },
+      distinct: ["date"],
+    }),
+  ]);
 
   const totalWorkingDays = batchDates.length;
   // Count distinct dates only — a student may have multiple scans in one day
@@ -258,6 +259,10 @@ export async function getStudentProfile(req: Request, res: Response): Promise<vo
       percentage: r.percentage, percentile: r.percentile,
       scores: r.scores, subjectMaxes: r.subjectMaxes, totalInBatch: r.totalInBatch,
     })),
+    // All individual scan records for calendar + punch-time log
+    attendanceLog: attendances.map(a => ({ date: a.date, markedAt: a.markedAt })),
+    // Every working day in last 60 days (for "absent" detection)
+    workingDays: batchDates.map(b => b.date),
   });
 }
 
