@@ -40,7 +40,7 @@ type StudentProfile = {
   workingDays: string[];
 };
 
-// ── Correct percentage: sum(scores)/sum(maxes) ────────────────────────────────
+// ── Correct percentage ─────────────────────────────────────────────────────────
 
 function realPct(r: TestResult): number {
   const maxes = r.subjectMaxes;
@@ -52,16 +52,26 @@ function realPct(r: TestResult): number {
   return r.percentage;
 }
 
-// ── Colour helpers ─────────────────────────────────────────────────────────────
+// ── Colours ────────────────────────────────────────────────────────────────────
 
 const SUBJ_COLORS = ["#6366F1","#0D9488","#EC4899","#B45309","#0891B2","#8B5CF6","#16A34A","#DC2626"];
-
 const ACCENT_POOL = ["#6366F1","#0D9488","#8B5CF6","#B45309","#0891B2","#BE185D","#16A34A","#1D6BF3"];
+
 function studentAccent(n: string) {
   return ACCENT_POOL[(n.charCodeAt(0) + n.charCodeAt(n.length - 1)) % ACCENT_POOL.length];
 }
-function attColor(p: number)   { return p >= 75 ? "#22C55E" : p >= 50 ? "#F59E0B" : "#EF4444"; }
-function scoreColor(p: number) { return p >= 70 ? "#22C55E" : p >= 50 ? "#F59E0B" : "#EF4444"; }
+function attGradient(p: number) {
+  return p >= 75 ? "linear-gradient(135deg,#064e3b,#065f46)" : p >= 50 ? "linear-gradient(135deg,#78350f,#92400e)" : "linear-gradient(135deg,#7f1d1d,#991b1b)";
+}
+function attValueColor(p: number) {
+  return p >= 75 ? "#4ade80" : p >= 50 ? "#fb923c" : "#f87171";
+}
+function scoreGradient(p: number) {
+  return p >= 70 ? "linear-gradient(135deg,#14532d,#15803d)" : p >= 50 ? "linear-gradient(135deg,#78350f,#b45309)" : "linear-gradient(135deg,#7f1d1d,#b91c1c)";
+}
+function scoreValueColor(p: number) {
+  return p >= 70 ? "#86efac" : p >= 50 ? "#fcd34d" : "#fca5a5";
+}
 function testAccent(name: string) {
   const u = name.toUpperCase();
   if (u.includes("CRT"))   return "#6366F1";
@@ -73,7 +83,7 @@ function testAccent(name: string) {
   return "#64748B";
 }
 
-// ── Format helpers ─────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function initials(n: string) {
   return n.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
@@ -99,21 +109,62 @@ function fmtDayShort(d: string) {
 // ── Animation variants ─────────────────────────────────────────────────────────
 
 const sp = { type: "spring" as const, stiffness: 100, damping: 22 };
-const fadeUp = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: sp } };
-const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } } };
+const fadeUp = { hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: sp } };
+const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } } };
 
 // ── Animated count-up ─────────────────────────────────────────────────────────
 
 const AnimatedNumber = memo(function AnimatedNumber({ target, suffix = "" }: { target: number; suffix?: string }) {
   const mv  = useMotionValue(0);
-  const sv  = useSpring(mv, { stiffness: 55, damping: 20 });
+  const sv  = useSpring(mv, { stiffness: 50, damping: 20 });
   const out = useTransform(sv, v => String(Math.round(v)));
   useEffect(() => {
-    const t = setTimeout(() => mv.set(target), 500);
+    const t = setTimeout(() => mv.set(target), 400);
     return () => clearTimeout(t);
   }, [target, mv]);
   return <><motion.span style={{ fontVariantNumeric: "tabular-nums" }}>{out}</motion.span>{suffix}</>;
 });
+
+// ── Stat card ─────────────────────────────────────────────────────────────────
+
+function StatCard({
+  label, value, sub, gradient, valueColor, barPct,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub: string;
+  gradient: string;
+  valueColor: string;
+  barPct?: number;
+}) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      whileHover={{ y: -4, scale: 1.015 }}
+      transition={{ duration: 0.18 }}
+      style={{ background: gradient, borderRadius: 20, padding: "22px 24px 20px", border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden", position: "relative", boxShadow: "0 4px 24px rgba(0,0,0,0.25)" }}
+    >
+      {/* Decorative circles */}
+      <div style={{ position: "absolute", right: -28, bottom: -28, width: 110, height: 110, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", right: 20, top: -20, width: 60, height: 60, borderRadius: "50%", background: "rgba(255,255,255,0.03)", pointerEvents: "none" }} />
+
+      <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1.4 }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 44, fontWeight: 900, color: valueColor, letterSpacing: "-2.5px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</p>
+      <p style={{ margin: "8px 0 0", fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.4 }}>{sub}</p>
+
+      {barPct !== undefined && (
+        <div style={{ marginTop: 16, height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
+          <motion.div
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: Math.min(1, barPct / 100) }}
+            transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.6 }}
+            style={{ height: "100%", width: "100%", background: valueColor, opacity: 0.8, borderRadius: 100, transformOrigin: "left center" }}
+          />
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 // ── Chart tooltip ─────────────────────────────────────────────────────────────
 
@@ -121,8 +172,8 @@ function ChartTip({ active, payload, label, suffix = "" }: Record<string, unknow
   if (!(active as boolean) || !(payload as unknown[])?.length) return null;
   const v = ((payload as { value: number }[])[0])?.value;
   return (
-    <div style={{ background: "#0F172A", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "10px 16px", fontSize: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.45)" }}>
-      <div style={{ color: "rgba(255,255,255,0.45)", marginBottom: 4, fontWeight: 500 }}>{label as string}</div>
+    <div style={{ background: "#0F172A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 16px", fontSize: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}>
+      <div style={{ color: "rgba(255,255,255,0.4)", marginBottom: 4, fontWeight: 500, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label as string}</div>
       <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>{typeof v === "number" ? v.toFixed(1) : v}{suffix}</div>
     </div>
   );
@@ -167,10 +218,10 @@ function AttendanceSection({
       cols.push(col);
     }
     const labels: { col: number; label: string }[] = [];
-    let lastMonth = -1;
+    let lastM = -1;
     cols.forEach((col, ci) => {
       const m = col[0].getMonth();
-      if (m !== lastMonth) { labels.push({ col: ci, label: col[0].toLocaleDateString("en-IN", { month: "short" }) }); lastMonth = m; }
+      if (m !== lastM) { labels.push({ col: ci, label: col[0].toLocaleDateString("en-IN", { month: "short" }) }); lastM = m; }
     });
     return { weeks: cols, monthLabels: labels };
   }, []);
@@ -191,7 +242,7 @@ function AttendanceSection({
     <motion.div variants={fadeUp} style={{ background: "var(--admin-card-bg)", borderRadius: 20, border: "1px solid var(--admin-card-border)", padding: "24px 28px", marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
         <div>
-          <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 700, color: "var(--admin-text)", letterSpacing: "-0.2px" }}>Attendance Calendar</p>
+          <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Attendance Calendar</p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--admin-text-faint)" }}>{presentDays} of {totalWorkingDays} working days · last 60 days</p>
         </div>
         <div style={{ display: "flex", gap: 14, fontSize: 11, color: "var(--admin-text-faint)", alignItems: "center" }}>
@@ -246,7 +297,7 @@ function AttendanceSection({
               const isWork = workingSet.has(hovered);
               const isFut = new Date(hovered + "T00:00:00") > now;
               return (
-                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.14 }}
                   style={{ padding: "8px 14px", background: "var(--admin-input-bg)", borderRadius: 10, border: "1px solid var(--admin-card-border)", fontSize: 12, display: "inline-flex", gap: 10, alignItems: "center" }}>
                   <span style={{ fontWeight: 700, color: "var(--admin-text)" }}>{fmtDayShort(hovered)}</span>
                   <span style={{ color: recs.length > 0 ? "#22C55E" : isWork && !isFut ? "#EF4444" : "var(--admin-text-faint)" }}>
@@ -290,11 +341,12 @@ const TestCard = memo(function TestCard({ result, subjectBest }: { result: TestR
   const maxes   = result.subjectMaxes;
   const total   = entries.reduce((s, [, v]) => s + v, 0);
   const maxTotal = maxes ? Object.values(maxes).reduce((s, v) => s + v, 0) : result.total;
+  const sc = pct >= 70 ? "#16A34A" : pct >= 50 ? "#D97706" : "#DC2626";
 
   return (
-    <motion.div variants={fadeUp} whileHover={{ y: -4, boxShadow: "0 24px 64px rgba(0,0,0,0.16)" }} transition={{ duration: 0.2 }}
+    <motion.div variants={fadeUp} whileHover={{ y: -4, boxShadow: "0 24px 60px rgba(0,0,0,0.14)" }} transition={{ duration: 0.18 }}
       style={{ background: "var(--admin-card-bg)", borderRadius: 18, border: "1px solid var(--admin-card-border)", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-      <div style={{ height: 4, background: `linear-gradient(90deg,${accent},${accent}50)`, flexShrink: 0 }} />
+      <div style={{ height: 4, background: `linear-gradient(90deg,${accent},${accent}40)`, flexShrink: 0 }} />
       <div style={{ padding: "18px 20px 20px", flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -302,16 +354,17 @@ const TestCard = memo(function TestCard({ result, subjectBest }: { result: TestR
             <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 4 }}>{fmtDate(result.testDate)}</div>
           </div>
           {result.rank != null && (
-            <div style={{ background: `${accent}15`, border: `1px solid ${accent}35`, borderRadius: 12, padding: "6px 12px", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ background: `${accent}12`, border: `1px solid ${accent}30`, borderRadius: 12, padding: "6px 12px", textAlign: "center", flexShrink: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: accent, lineHeight: 1 }}>#{result.rank}</div>
               {result.totalInBatch && <div style={{ fontSize: 9, color: "var(--admin-text-faint)", marginTop: 2 }}>of {result.totalInBatch}</div>}
             </div>
           )}
         </div>
+
         <div style={{ background: "var(--admin-input-bg)", borderRadius: 14, padding: "14px 16px", border: "1px solid var(--admin-card-border)" }}>
           <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
             <div>
-              <div style={{ fontSize: 38, fontWeight: 900, color: scoreColor(pct), letterSpacing: "-2px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ fontSize: 38, fontWeight: 900, color: sc, letterSpacing: "-2px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
                 {pct.toFixed(1)}<span style={{ fontSize: 20, fontWeight: 600 }}>%</span>
               </div>
               <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 5 }}>{total} / {maxTotal} marks</div>
@@ -326,10 +379,11 @@ const TestCard = memo(function TestCard({ result, subjectBest }: { result: TestR
           <div style={{ height: 6, background: "var(--admin-card-border)", borderRadius: 100, overflow: "hidden" }}>
             <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: Math.min(1, pct / 100) }}
               transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
-              style={{ height: "100%", width: "100%", borderRadius: 100, background: scoreColor(pct), transformOrigin: "left center" }}
+              style={{ height: "100%", width: "100%", borderRadius: 100, background: sc, transformOrigin: "left center" }}
             />
           </div>
         </div>
+
         {entries.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: 1.1, marginBottom: 2 }}>Subjects</div>
@@ -365,13 +419,16 @@ const TestCard = memo(function TestCard({ result, subjectBest }: { result: TestR
 function LoadingSkeleton() {
   return (
     <div style={{ padding: "28px 32px 80px", maxWidth: 1100, margin: "0 auto" }}>
-      <div className="admin-skeleton" style={{ height: 14, width: 60, borderRadius: 6, marginBottom: 28 }} />
-      <div className="admin-skeleton" style={{ height: 210, borderRadius: 24, marginBottom: 20 }} />
+      <div className="admin-skeleton" style={{ height: 14, width: 60, borderRadius: 6, marginBottom: 24 }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 16 }}>
+        {[1,2,3,4].map(i => <div key={i} className="admin-skeleton" style={{ height: 140, borderRadius: 20 }} />)}
+      </div>
+      <div className="admin-skeleton" style={{ height: 90, borderRadius: 18, marginBottom: 16 }} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         {[1,2].map(i => <div key={i} className="admin-skeleton" style={{ height: 260, borderRadius: 18 }} />)}
       </div>
       <div className="admin-skeleton" style={{ height: 240, borderRadius: 20, marginBottom: 20 }} />
-      <div className="admin-skeleton" style={{ height: 22, width: 160, borderRadius: 6, marginBottom: 18 }} />
+      <div className="admin-skeleton" style={{ height: 22, width: 160, borderRadius: 6, marginBottom: 16 }} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
         {[1,2,3].map(i => <div key={i} className="admin-skeleton" style={{ height: 380, borderRadius: 18 }} />)}
       </div>
@@ -429,7 +486,7 @@ export default function StudentProfilePage() {
   if (loading) return <LoadingSkeleton />;
 
   if (!profile) return (
-    <div style={{ padding: "28px 32px 80px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ padding: "28px 32px", maxWidth: 1100, margin: "0 auto" }}>
       <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--admin-text-muted)", fontSize: 13, fontWeight: 500, padding: "4px 0", marginBottom: 40 }}>← Back</button>
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
         <p style={{ fontSize: 36, margin: "0 0 10px" }}>👤</p>
@@ -440,18 +497,15 @@ export default function StudentProfilePage() {
   );
 
   const accent   = studentAccent(profile.name);
-  const avgScore = profile.results.length ? Math.round(profile.results.reduce((s, r) => s + realPct(r), 0) / profile.results.length) : null;
-  const bestRank = profile.results.reduce<number | null>((b, r) => r.rank != null && (b === null || r.rank < b) ? r.rank : b, null);
-
-  const stats = [
-    { label: "Attendance", value: <AnimatedNumber target={profile.attendancePct} suffix="%" />, sub: `${profile.presentDays} / ${profile.totalWorkingDays} days`, color: attColor(profile.attendancePct) },
-    { label: "Avg Score",  value: avgScore != null ? <AnimatedNumber target={avgScore} suffix="%" /> : <span>—</span>, sub: `${profile.results.length} test${profile.results.length !== 1 ? "s" : ""}`, color: avgScore != null ? scoreColor(avgScore) : "rgba(255,255,255,0.35)" },
-    { label: "Best Rank",  value: <span style={{ fontVariantNumeric: "tabular-nums" }}>{bestRank != null ? `#${bestRank}` : "—"}</span>, sub: "across all tests", color: "#60A5FA" },
-    { label: "Last Seen",  value: <span>{fmtAgo(profile.lastSeen)}</span>, sub: profile.lastSeen ? new Date(profile.lastSeen).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" }) : "no records", color: "rgba(255,255,255,0.9)" },
-  ];
+  const avgScore = profile.results.length
+    ? Math.round(profile.results.reduce((s, r) => s + realPct(r), 0) / profile.results.length)
+    : null;
+  const bestRank = profile.results.reduce<number | null>(
+    (b, r) => r.rank != null && (b === null || r.rank < b) ? r.rank : b, null
+  );
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.28 }}
       style={{ padding: "28px 32px 80px", maxWidth: 1100, margin: "0 auto" }}>
 
       {/* Back */}
@@ -463,110 +517,135 @@ export default function StudentProfilePage() {
 
       <motion.div variants={stagger} initial="hidden" animate="show">
 
-        {/* ── HERO — dark gradient card with integrated stats ─────────────── */}
-        <motion.div variants={fadeUp} style={{
-          borderRadius: 24, marginBottom: 20, overflow: "hidden",
-          background: `linear-gradient(140deg, #0E1A22 0%, #111d2a 55%, ${accent}1a 100%)`,
-          border: `1px solid ${accent}28`,
-          boxShadow: `0 8px 48px rgba(0,0,0,0.35), 0 0 0 1px ${accent}12`,
-          position: "relative",
-        }}>
-          {/* Decorative glow orbs */}
-          <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, borderRadius: "50%", background: `radial-gradient(circle, ${accent}15 0%, transparent 65%)`, pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: -20, left: 120, width: 200, height: 130, background: `radial-gradient(ellipse, ${accent}08 0%, transparent 70%)`, pointerEvents: "none" }} />
+        {/* ── STAT CARDS — first thing you see ─────────────────────────────── */}
+        <motion.div variants={stagger} style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 16 }}>
 
-          {/* Avatar + name row */}
-          <div style={{ padding: "28px 32px 24px", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", position: "relative" }}>
-            <div style={{
-              width: 78, height: 78, borderRadius: 22, flexShrink: 0,
-              background: `${accent}22`, color: accent,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 26, fontWeight: 900, letterSpacing: "0.5px",
-              border: `2px solid ${accent}45`,
-              boxShadow: `0 0 0 4px ${accent}14`,
-            }}>
-              {initials(profile.name)}
-            </div>
+          <StatCard
+            label="Attendance"
+            value={<AnimatedNumber target={profile.attendancePct} suffix="%" />}
+            sub={`${profile.presentDays} of ${profile.totalWorkingDays} days`}
+            gradient={attGradient(profile.attendancePct)}
+            valueColor={attValueColor(profile.attendancePct)}
+            barPct={profile.attendancePct}
+          />
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: "#FFFFFF", letterSpacing: "-1px", lineHeight: 1.1 }}>
-                {profile.name}
-              </h1>
-              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{profile.enrollmentNo}</span>
-                <span style={{ color: "rgba(255,255,255,0.18)" }}>·</span>
-                <span style={{ background: `${accent}25`, color: accent, borderRadius: 100, padding: "3px 12px", fontSize: 12, fontWeight: 700, border: `1px solid ${accent}38` }}>{profile.batch}</span>
-                <span style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.45)", borderRadius: 100, padding: "3px 12px", fontSize: 12, fontWeight: 500, border: "1px solid rgba(255,255,255,0.1)" }}>{profile.center}</span>
-              </div>
-              {profile.parent && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-                  Parent: <strong style={{ color: "rgba(255,255,255,0.52)", fontWeight: 600 }}>{profile.parent.name}</strong>
-                  {" · "}{profile.parent.phone}
-                  {profile.parent.email && <>{" · "}{profile.parent.email}</>}
-                </div>
-              )}
-            </div>
-          </div>
+          <StatCard
+            label="Avg Score"
+            value={avgScore != null ? <AnimatedNumber target={avgScore} suffix="%" /> : <span>—</span>}
+            sub={`${profile.results.length} test${profile.results.length !== 1 ? "s" : ""} taken`}
+            gradient={avgScore != null ? scoreGradient(avgScore) : "linear-gradient(135deg,#1e293b,#334155)"}
+            valueColor={avgScore != null ? scoreValueColor(avgScore) : "rgba(255,255,255,0.4)"}
+            barPct={avgScore ?? undefined}
+          />
 
-          {/* Stats bar — bottom of hero */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", display: "grid", gridTemplateColumns: "repeat(4,1fr)", position: "relative" }}>
-            {stats.map((s, i) => (
-              <div key={s.label} style={{ padding: "18px 26px", borderRight: i < 3 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.3, marginBottom: 7 }}>{s.label}</div>
-                <div style={{ fontSize: 30, fontWeight: 900, color: s.color, letterSpacing: "-1.2px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", marginTop: 5 }}>{s.sub}</div>
-              </div>
-            ))}
-          </div>
+          <StatCard
+            label="Best Rank"
+            value={<span>{bestRank != null ? `#${bestRank}` : "—"}</span>}
+            sub="across all tests"
+            gradient="linear-gradient(135deg,#1e3a5f,#1d4ed8)"
+            valueColor="#93c5fd"
+          />
+
+          <StatCard
+            label="Last Seen"
+            value={<span style={{ fontSize: bestRank != null ? 44 : 36 }}>{fmtAgo(profile.lastSeen)}</span>}
+            sub={profile.lastSeen
+              ? new Date(profile.lastSeen).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })
+              : "no attendance yet"}
+            gradient="linear-gradient(135deg,#1e293b,#334155)"
+            valueColor="rgba(255,255,255,0.92)"
+          />
         </motion.div>
 
-        {/* ── Charts ───────────────────────────────────────────────────────── */}
+        {/* ── STUDENT INFO — compact card ───────────────────────────────────── */}
+        <motion.div variants={fadeUp} style={{
+          background: "var(--admin-card-bg)", borderRadius: 18,
+          border: "1px solid var(--admin-card-border)",
+          padding: "18px 24px", marginBottom: 16,
+          display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap",
+          boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
+          overflow: "hidden", position: "relative",
+        }}>
+          {/* Subtle accent line */}
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: `linear-gradient(180deg,${accent},${accent}30)`, borderRadius: "18px 0 0 18px" }} />
+
+          {/* Avatar */}
+          <div style={{
+            width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+            background: `${accent}15`, color: accent,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, fontWeight: 900,
+            border: `1.5px solid ${accent}30`,
+          }}>
+            {initials(profile.name)}
+          </div>
+
+          {/* Name + tags */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "var(--admin-text)", letterSpacing: "-0.5px", lineHeight: 1.2 }}>{profile.name}</div>
+            <div style={{ display: "flex", gap: 7, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--admin-text-faint)", fontVariantNumeric: "tabular-nums" }}>{profile.enrollmentNo}</span>
+              <span style={{ color: "var(--admin-card-border)" }}>·</span>
+              <span style={{ background: `${accent}14`, color: accent, borderRadius: 100, padding: "2px 10px", fontSize: 11, fontWeight: 700, border: `1px solid ${accent}28` }}>{profile.batch}</span>
+              <span style={{ background: "var(--admin-input-bg)", color: "var(--admin-text-muted)", borderRadius: 100, padding: "2px 10px", fontSize: 11, fontWeight: 500, border: "1px solid var(--admin-card-border)" }}>{profile.center}</span>
+            </div>
+          </div>
+
+          {/* Parent info */}
+          {profile.parent && (
+            <div style={{ fontSize: 12, color: "var(--admin-text-faint)", textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontWeight: 600, color: "var(--admin-text-muted)", marginBottom: 2 }}>{profile.parent.name}</div>
+              <div>{profile.parent.phone}</div>
+              {profile.parent.email && <div style={{ marginTop: 1 }}>{profile.parent.email}</div>}
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── CHARTS ───────────────────────────────────────────────────────── */}
         {profile.results.length > 0 && (
           <motion.div variants={stagger} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
 
-            <motion.div variants={fadeUp} style={{ background: "var(--admin-card-bg)", borderRadius: 18, border: "1px solid var(--admin-card-border)", padding: "22px 24px", overflow: "hidden", position: "relative" }}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: 4, height: "100%", background: `linear-gradient(180deg,${accent},${accent}20)`, borderRadius: "18px 0 0 18px" }} />
-              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Subject Averages</p>
-              <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--admin-text-faint)" }}>Mean marks across all tests</p>
+            <motion.div variants={fadeUp} style={{ background: "var(--admin-card-bg)", borderRadius: 18, border: "1px solid var(--admin-card-border)", padding: "20px 22px" }}>
+              <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Subject Averages</p>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--admin-text-faint)" }}>Mean marks across all tests</p>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={subjectAvgs} barSize={34} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
+                <BarChart data={subjectAvgs} barSize={32} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
                   <XAxis dataKey="subject" tick={{ fontSize: 11, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTip suffix=" avg" />} cursor={{ fill: "rgba(128,128,128,0.06)", radius: 6 }} />
                   <Bar dataKey="avg" radius={[8,8,0,0]}>
-                    {subjectAvgs.map((_, i) => <Cell key={i} fill={SUBJ_COLORS[i % SUBJ_COLORS.length]} fillOpacity={0.9} />)}
+                    {subjectAvgs.map((_, i) => <Cell key={i} fill={SUBJ_COLORS[i % SUBJ_COLORS.length]} fillOpacity={0.88} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </motion.div>
 
-            <motion.div variants={fadeUp} style={{ background: "var(--admin-card-bg)", borderRadius: 18, border: "1px solid var(--admin-card-border)", padding: "22px 24px", overflow: "hidden", position: "relative" }}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: 4, height: "100%", background: "linear-gradient(180deg,#6366F1,#6366F120)", borderRadius: "18px 0 0 18px" }} />
-              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Score Trend</p>
-              <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--admin-text-faint)" }}>Performance over time · oldest → newest</p>
+            <motion.div variants={fadeUp} style={{ background: "var(--admin-card-bg)", borderRadius: 18, border: "1px solid var(--admin-card-border)", padding: "20px 22px" }}>
+              <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Score Trend</p>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--admin-text-faint)" }}>Performance over time · oldest → newest</p>
               {trendData.length > 1 ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
                     <defs>
                       <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor="#6366F1" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#6366F1" stopOpacity={0.01} />
+                        <stop offset="0%"   stopColor={accent} stopOpacity={0.28} />
+                        <stop offset="100%" stopColor={accent} stopOpacity={0.01} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                     <YAxis domain={[trendMin, trendMax]} tick={{ fontSize: 10, fill: "var(--admin-text-faint)" as string }} axisLine={false} tickLine={false} />
                     <Tooltip content={<ChartTip suffix="%" />} />
-                    <Area type="monotone" dataKey="pct" stroke="#6366F1" strokeWidth={2.5} fill="url(#tg)"
-                      dot={{ fill: "#6366F1", r: 5, strokeWidth: 0 }}
-                      activeDot={{ r: 7, fill: "#6366F1", stroke: "var(--admin-card-bg)", strokeWidth: 2 }}
+                    <Area type="monotone" dataKey="pct" stroke={accent} strokeWidth={2.5} fill="url(#tg)"
+                      dot={{ fill: accent, r: 5, strokeWidth: 0 }}
+                      activeDot={{ r: 7, fill: accent, stroke: "var(--admin-card-bg)", strokeWidth: 2 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div style={{ height: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <p style={{ margin: 0, fontSize: 52, fontWeight: 900, color: scoreColor(trendData[0]?.pct ?? 0), letterSpacing: "-2px", lineHeight: 1 }}>
+                  <p style={{ margin: 0, fontSize: 48, fontWeight: 900, color: accent, letterSpacing: "-2px", lineHeight: 1 }}>
                     {trendData[0]?.pct.toFixed(1) ?? "—"}%
                   </p>
                   <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-muted)" }}>{trendData[0]?.name}</p>
@@ -577,7 +656,7 @@ export default function StudentProfilePage() {
           </motion.div>
         )}
 
-        {/* ── Attendance calendar ───────────────────────────────────────────── */}
+        {/* ── ATTENDANCE CALENDAR ───────────────────────────────────────────── */}
         <AttendanceSection
           attendanceLog={profile.attendanceLog ?? []}
           workingDays={profile.workingDays ?? []}
@@ -585,8 +664,8 @@ export default function StudentProfilePage() {
           totalWorkingDays={profile.totalWorkingDays}
         />
 
-        {/* ── Test Analysis ─────────────────────────────────────────────────── */}
-        <motion.div variants={fadeUp} style={{ marginBottom: 18, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        {/* ── TEST ANALYSIS ─────────────────────────────────────────────────── */}
+        <motion.div variants={fadeUp} style={{ marginBottom: 18, display: "flex", alignItems: "baseline", gap: 12 }}>
           <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)", letterSpacing: "-0.5px" }}>Test Analysis</p>
           {profile.results.length > 0 && (
             <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-faint)" }}>
