@@ -140,22 +140,39 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // If an email is provided, make sure it isn't already taken by a DIFFERENT parent
-  // Compare against the student's actual current parent (not by new phone, which may have changed)
+  // Fetch the student's current parentId up-front — needed for both email check and phone-change detection
+  const student = await prisma.student.findUnique({ where: { id }, select: { parentId: true } });
+  if (!student) { res.status(404).json({ message: "Student not found" }); return; }
+
+  // Ensure the email isn't already owned by a completely different parent
   if (parentEmail) {
     const emailOwner = await prisma.parent.findUnique({ where: { email: parentEmail } });
-    if (emailOwner) {
-      const student = await prisma.student.findUnique({ where: { id }, select: { parentId: true } });
-      if (emailOwner.id !== student?.parentId) {
-        res.status(409).json({ message: `Email ${parentEmail} is already linked to another parent account.` });
-        return;
-      }
+    if (emailOwner && emailOwner.id !== student.parentId) {
+      res.status(409).json({ message: `Email ${parentEmail} is already linked to another parent account.` });
+      return;
     }
   }
 
   let parent = await prisma.parent.findFirst({ where: { phone: parentPhone } });
   if (!parent) {
-    parent = await prisma.parent.create({ data: { name: parentName || "Parent", phone: parentPhone, email: parentEmail || null } });
+    // No parent with this phone yet.
+    // If the email already belongs to the current parent (phone-change scenario),
+    // update the existing parent record instead of creating a duplicate — which
+    // would violate the email unique constraint.
+    const emailIsCurrentParents = parentEmail
+      ? await prisma.parent.count({ where: { id: student.parentId, email: parentEmail } })
+      : 0;
+
+    if (emailIsCurrentParents) {
+      parent = await prisma.parent.update({
+        where: { id: student.parentId },
+        data: { phone: parentPhone, ...(parentName ? { name: parentName } : {}), email: parentEmail ?? null },
+      });
+    } else {
+      parent = await prisma.parent.create({
+        data: { name: parentName || "Parent", phone: parentPhone, email: parentEmail || null },
+      });
+    }
   } else {
     parent = await prisma.parent.update({
       where: { id: parent.id },
