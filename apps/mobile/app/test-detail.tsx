@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, ACCENT, ACCENT_2, GOOD, BAD, WARN, BgBlobs, GlassCard as BlurGlass } from "@/src/theme";
 import { getSelectedResult } from "@/src/selectedResult";
+import { realPct } from "@/src/api/auth";
 
 function AnimBar({ pct, delay, variant }: { pct: number; delay: number; variant: "student" | "class" }) {
   const t = useTheme();
@@ -51,7 +52,8 @@ export default function TestDetailScreen() {
     );
   }
 
-  const pctColor = result.percentage >= 70 ? GOOD : result.percentage >= 50 ? WARN : BAD;
+  const pct = realPct(result);
+  const pctColor = pct >= 70 ? GOOD : pct >= 50 ? WARN : BAD;
   const rankColor = !result.rank ? t.text3 : result.rank === 1 ? WARN : result.rank <= 3 ? ACCENT_2 : result.rank <= 10 ? GOOD : t.text3;
   const subjects = Object.entries(result.scores);
   const hasAvg = !!result.classAvgScores && Object.keys(result.classAvgScores).length > 0;
@@ -103,7 +105,7 @@ export default function TestDetailScreen() {
 
             <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12 }}>
               <Text style={{ fontSize: 72, fontWeight: "900", color: pctColor, lineHeight: 76, letterSpacing: -3 }}>
-                {result.percentage.toFixed(1)}
+                {pct.toFixed(1)}
               </Text>
               <View style={{ paddingBottom: 10 }}>
                 <Text style={{ fontSize: 28, fontWeight: "800", color: pctColor, opacity: 0.7 }}>%</Text>

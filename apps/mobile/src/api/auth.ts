@@ -2,6 +2,19 @@ const BASE_URL = "https://kapedutech-platform.onrender.com/api/auth";
 const FIREBASE_VERIFY_URL = `${BASE_URL}/parent/firebase-verify`;
 const EMAIL_OTP_URL = `${BASE_URL}/parent/request-otp-email`;
 const EMAIL_VERIFY_URL = `${BASE_URL}/parent/verify-otp-email`;
+
+export async function checkPhoneRegistered(phone: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${BASE_URL}/parent/check-phone/${phone}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    const data = await res.json() as { registered: boolean };
+    return data.registered;
+  } catch {
+    return true; // timeout or network error → let Firebase proceed
+  }
+}
 const ATTENDANCE_URL = "https://kapedutech-platform.onrender.com/api/attendance";
 
 export type AttendanceRecord = {
@@ -146,6 +159,18 @@ export type TestResult = {
   percentile: number | null;
   uploadedAt: string;
 };
+
+// Recalculate percentage from raw scores — the stored `percentage` field can be
+// corrupted at upload time if the total-marks denominator was wrong.
+export function realPct(r: TestResult): number {
+  const maxes = r.subjectMaxes;
+  if (maxes && Object.keys(maxes).length > 0) {
+    const totalScore = Object.values(r.scores).reduce((a, b) => a + b, 0);
+    const totalMax   = Object.values(maxes).reduce((a, b) => a + b, 0);
+    if (totalMax > 0) return Math.round((totalScore / totalMax) * 1000) / 10;
+  }
+  return r.percentage;
+}
 
 export async function getStudentResults(studentId: string, token: string): Promise<TestResult[]> {
   try {

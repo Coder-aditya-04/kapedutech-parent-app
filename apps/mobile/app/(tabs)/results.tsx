@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useFocusEffect, router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { getStudentResults, type TestResult } from "@/src/api/auth";
+import { getStudentResults, realPct, type TestResult } from "@/src/api/auth";
 import { useTheme, ACCENT, ACCENT_2, GOOD, BAD, WARN, BgBlobs, GlassCard as BlurGlass } from "@/src/theme";
 import { setSelectedResult } from "@/src/selectedResult";
 import { useAuth } from "@/src/context/AuthContext";
@@ -124,7 +124,8 @@ function CompareBars({ result }: { result: TestResult }) {
 
 function ResultCard({ result, expanded, onToggle, onViewDetail }: { result: TestResult; expanded: boolean; onToggle: () => void; onViewDetail: () => void }) {
   const t = useTheme();
-  const pctColor = result.percentage >= 70 ? GOOD : result.percentage >= 50 ? WARN : BAD;
+  const pct = realPct(result);
+  const pctColor = pct >= 70 ? GOOD : pct >= 50 ? WARN : BAD;
   const rankColor = !result.rank ? t.text3 : result.rank === 1 ? WARN : result.rank <= 3 ? ACCENT_2 : result.rank <= 10 ? GOOD : t.text3;
 
   return (
@@ -141,7 +142,7 @@ function ResultCard({ result, expanded, onToggle, onViewDetail }: { result: Test
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={{ fontSize: 24, fontWeight: "800", color: pctColor, letterSpacing: -0.5 }}>
-                {result.percentage.toFixed(1)}<Text style={{ fontSize: 13, color: t.text3 }}>%</Text>
+                {pct.toFixed(1)}<Text style={{ fontSize: 13, color: t.text3 }}>%</Text>
               </Text>
               <Text style={{ fontSize: 11, color: t.text3, marginTop: 1 }}>{result.total} marks</Text>
             </View>
@@ -252,7 +253,7 @@ export default function ResultsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const avgPct = results.length > 0
-    ? (results.reduce((a, r) => a + r.percentage, 0) / results.length).toFixed(1)
+    ? (results.reduce((a, r) => a + realPct(r), 0) / results.length).toFixed(1)
     : "0";
   const bestRank = results.length > 0 ? Math.min(...results.map(r => r.rank ?? 999)) : null;
   const latest = results[0];
