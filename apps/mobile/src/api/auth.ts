@@ -1,4 +1,4 @@
-const BASE_URL = "https://kapedutech-platform.onrender.com/api/auth";
+const BASE_URL = "https://kapedutech-platform.vercel.app/api/auth";
 const FIREBASE_VERIFY_URL = `${BASE_URL}/parent/firebase-verify`;
 const EMAIL_OTP_URL = `${BASE_URL}/parent/request-otp-email`;
 const EMAIL_VERIFY_URL = `${BASE_URL}/parent/verify-otp-email`;
@@ -15,7 +15,7 @@ export async function checkPhoneRegistered(phone: string): Promise<boolean> {
     return true; // timeout or network error → let Firebase proceed
   }
 }
-const ATTENDANCE_URL = "https://kapedutech-platform.onrender.com/api/attendance";
+const ATTENDANCE_URL = "https://kapedutech-platform.vercel.app/api/attendance";
 
 export type AttendanceRecord = {
   id: string;

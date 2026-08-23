@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Parent {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String
+  email     String?   @unique
+  pushToken String?
+  students  Student[]
+}
+
+model Student {
+  id               String       @id @default(cuid())
+  userId           String
+  enrollmentNo     String
+  name             String       @default("")
+  batch            String       @default("")
+  center           String       @default("College Road")
+  qrCode           String       @unique
+  qrCodeGenerated  Boolean      @default(false)
+  parentId         String
+  parent           Parent       @relation(fields: [parentId], references: [id])
+  attendances      Attendance[]
+  results          TestResult[]
+}
+
+model Batch {
+  id        String   @id @default(cuid())
+  name      String
+  center    String   @default("College Road")
+  createdAt DateTime @default(now())
+
+  @@unique([name, center])
+}
+
+model TestResult {
+  id           String   @id @default(cuid())
+  testName     String
+  testDate     String
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id])
+  rank         Int?
+  totalInBatch Int?
+  scores       Json
+  subjectMaxes Json?
+  total        Float
+  percentage   Float
+  percentile   Float?
+  uploadedAt   DateTime @default(now())
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  phone     String
+  otp       String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+}
+
+model Attendance {
+  id               String         @id @default(cuid())
+  studentId        String
+  student          Student        @relation(fields: [studentId], references: [id])
+  markedAt         DateTime       @default(now())
+  date             String
+  type             AttendanceType @default(PUNCH_IN)
+  notificationSent Boolean        @default(false)
+}
+
+enum AttendanceType {
+  PUNCH_IN
+  PUNCH_OUT
+}
