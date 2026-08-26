@@ -113,9 +113,11 @@ export default function AttendancePage() {
     try {
       const params = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
       const res = await fetch(`/api/admin/notifications/absent-alert${params}`, { method: "POST" });
-      const data = await res.json() as { sent?: number; skipped?: number; message?: string };
+      const data = await res.json() as { sent?: number; skipped?: number; holiday?: number; message?: string };
       if (res.ok) {
-        setAlertMsg(`Sent to ${data.sent ?? 0} parents · ${data.skipped ?? 0} already present`);
+        const parts = [`Sent to ${data.sent ?? 0} parents`, `${data.skipped ?? 0} already present`];
+        if ((data.holiday ?? 0) > 0) parts.push(`${data.holiday} skipped (holiday batch)`);
+        setAlertMsg(parts.join(" · "));
         setAlertState("done");
       } else {
         setAlertMsg(data.message ?? "Failed to send");
