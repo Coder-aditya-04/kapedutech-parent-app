@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 type Student = { id: string; name: string; enrollmentNo: string; batch: string };
 type AttendanceRecord = { id: string; studentId: string; date: string; type: "PUNCH_IN" | "PUNCH_OUT"; markedAt: string; student: Student };
@@ -52,7 +52,10 @@ export default function AttendancePage() {
   const [center, setCenter] = useState("All");
   const [search, setSearch] = useState("");
   const [showBatchFilter, setShowBatchFilter] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const [alertState, setAlertState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [alertMsg, setAlertMsg] = useState("");
+  const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   const [date, setDate] = useState(today);
 
   // Reload batches whenever center changes — keeps dropdown in sync
@@ -104,6 +107,28 @@ export default function AttendancePage() {
 
   useEffect(() => { setLoading(true); load(); }, [load]);
 
+  async function sendAbsentAlert() {
+    if (alertState === "sending") return;
+    setAlertState("sending");
+    try {
+      const params = center !== "All" ? `?center=${encodeURIComponent(center)}` : "";
+      const res = await fetch(`/api/admin/notifications/absent-alert${params}`, { method: "POST" });
+      const data = await res.json() as { sent?: number; skipped?: number; message?: string };
+      if (res.ok) {
+        setAlertMsg(`Sent to ${data.sent ?? 0} parents · ${data.skipped ?? 0} already present`);
+        setAlertState("done");
+      } else {
+        setAlertMsg(data.message ?? "Failed to send");
+        setAlertState("error");
+      }
+    } catch {
+      setAlertMsg("Network error");
+      setAlertState("error");
+    }
+    if (alertTimer.current) clearTimeout(alertTimer.current);
+    alertTimer.current = setTimeout(() => setAlertState("idle"), 6000);
+  }
+
   // Auto-refresh: every 10s + instantly when tab regains focus (silent — no spinner)
   useEffect(() => {
     const id = setInterval(load, 10000);
@@ -137,14 +162,17 @@ export default function AttendancePage() {
       )
     : allSummaries;
 
-  const presentCount = allSummaries.filter(s => s.punchIn !== null).length;
-  const totalCount = batchFiltered.length;
-  const absentCount = Math.max(0, totalCount - presentCount);
+  const completeCount = allSummaries.filter(s => s.punchIn !== null && s.punchOut !== null).length;
+  const partialCount  = allSummaries.filter(s => s.punchIn !== null && s.punchOut === null).length;
+  const presentCount  = allSummaries.filter(s => s.punchIn !== null).length;
+  const totalCount    = batchFiltered.length;
+  const absentCount   = Math.max(0, totalCount - presentCount);
 
   const statCards = [
-    { label: "Present", value: presentCount, color: "#059669", bg: "rgba(5,150,105,0.1)", border: "rgba(5,150,105,0.2)" },
-    { label: "Absent",  value: absentCount,  color: "#DC2626", bg: "rgba(220,38,38,0.1)",  border: "rgba(220,38,38,0.2)" },
-    { label: "Total",   value: totalCount,   color: "#4F46E5", bg: "rgba(79,70,229,0.1)",  border: "rgba(79,70,229,0.2)" },
+    { label: "Present",  value: presentCount,  color: "#059669", bg: "rgba(5,150,105,0.1)",   border: "rgba(5,150,105,0.2)" },
+    { label: "Partial",  value: partialCount,  color: "#D97706", bg: "rgba(217,119,6,0.1)",    border: "rgba(217,119,6,0.2)" },
+    { label: "Absent",   value: absentCount,   color: "#DC2626", bg: "rgba(220,38,38,0.1)",    border: "rgba(220,38,38,0.2)" },
+    { label: "Total",    value: totalCount,    color: "#4F46E5", bg: "rgba(79,70,229,0.1)",    border: "rgba(79,70,229,0.2)" },
   ];
 
   const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -157,12 +185,27 @@ export default function AttendancePage() {
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0, letterSpacing: -0.3 }}>Attendance</h1>
           <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13, margin: "4px 0 0" }}>{displayDate}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <input
             type="date" value={date} max={today}
             onChange={e => setDate(e.target.value)}
             style={{ padding: "8px 12px", border: "1px solid var(--admin-input-border)", borderRadius: 8, fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-input-bg)", cursor: "pointer" }}
           />
+          {/* Only show alert button for today — no point notifying for past dates */}
+          {date === today && (
+            <button
+              onClick={sendAbsentAlert}
+              disabled={alertState === "sending"}
+              title="Send push notification to parents of all absent students"
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "none", borderRadius: 100, background: alertState === "done" ? "#059669" : alertState === "error" ? "#DC2626" : "#D97706", color: "#fff", fontSize: 13, fontWeight: 600, cursor: alertState === "sending" ? "wait" : "pointer", opacity: alertState === "sending" ? 0.7 : 1, transition: "background 0.2s" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              {alertState === "sending" ? "Sending…" : alertState === "done" ? "Sent!" : alertState === "error" ? "Failed" : `Notify Absent (${absentCount})`}
+            </button>
+          )}
+          {(alertState === "done" || alertState === "error") && alertMsg && (
+            <span style={{ fontSize: 12, color: alertState === "done" ? "#059669" : "#DC2626", fontWeight: 500 }}>{alertMsg}</span>
+          )}
           <button
             onClick={() => exportCSV(summaries, date)}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", border: "1px solid var(--admin-card-border)", borderRadius: 100, background: "var(--admin-card-bg)", color: "var(--admin-text)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
