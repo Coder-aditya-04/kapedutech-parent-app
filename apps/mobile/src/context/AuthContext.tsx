@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import auth from "@react-native-firebase/auth";
 
 type AuthContextType = {
   phone: string | null;
@@ -32,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const raw = await AsyncStorage.getItem("parent");
           if (raw) {
             const parent = JSON.parse(raw);
-            setPhone(parent.phone ?? null);
+            setPhone(parent.phone || null);
             // Restore active student — fall back to first student if not saved
             const saved = await AsyncStorage.getItem("active_student_id");
             const firstId = parent.students?.[0]?.id ?? null;
@@ -56,7 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function logout() {
     setPhone(null);
     setActiveStudentIdState(null);
-    AsyncStorage.multiRemove(["auth_token", "parent", "active_student_id"]);
+    // Sign out of Firebase so its session doesn't auto-login the next visitor
+    void Promise.all([
+      AsyncStorage.multiRemove(["auth_token", "parent", "active_student_id"]),
+      auth().signOut().catch(() => {}),
+    ]);
   }
 
   return (
