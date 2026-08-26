@@ -2,6 +2,11 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireParentAuth } from "@/lib/auth";
 
+// A date is a "working day" only if ≥15% of batch students attended.
+// This prevents a single stray scan (wrong day, rogue student) from
+// creating false "working days" that make everyone else look absent.
+const WORKING_DAY_THRESHOLD = 0.15;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ studentId: string }> }
@@ -12,29 +17,49 @@ export async function GET(
 
     const { studentId } = await params;
 
-    const allRecords = await prisma.attendance.findMany({
-      where: { studentId, type: "PUNCH_IN" },
-      select: { date: true },
-      orderBy: { date: "asc" },
-    });
-    const presentDates = [...new Set(allRecords.map(r => r.date))];
-    const totalPresent = presentDates.length;
-
-    const studentBatch = await prisma.student.findUnique({
+    const studentInfo = await prisma.student.findUnique({
       where: { id: studentId },
       select: { batch: true },
     });
+    const batchName = studentInfo?.batch ?? "";
 
-    const workingDaysRaw = await prisma.attendance.findMany({
-      where: { type: "PUNCH_IN", student: { batch: studentBatch?.batch ?? "" } },
-      select: { date: true },
-      distinct: ["date"],
-      orderBy: { date: "asc" },
-    });
-    const workingDates = workingDaysRaw.map(r => r.date);
+    const [allRecords, allBatchAttendance, totalBatchStudents] = await Promise.all([
+      // Student's own PUNCH_IN dates (for present days + streak)
+      prisma.attendance.findMany({
+        where: { studentId, type: "PUNCH_IN" },
+        select: { date: true },
+        orderBy: { date: "asc" },
+      }),
+      // All PUNCH_IN records across the whole batch (to determine working days)
+      prisma.attendance.findMany({
+        where: { type: "PUNCH_IN", student: { batch: batchName } },
+        select: { date: true, studentId: true },
+      }),
+      // Total students in batch (for threshold calculation)
+      prisma.student.count({ where: { batch: batchName } }),
+    ]);
+
+    const presentDates = [...new Set(allRecords.map(r => r.date))];
+    const totalPresent = presentDates.length;
+
+    // Count distinct students per date across the batch
+    const dateStudentMap = new Map<string, Set<string>>();
+    for (const r of allBatchAttendance) {
+      if (!dateStudentMap.has(r.date)) dateStudentMap.set(r.date, new Set());
+      dateStudentMap.get(r.date)!.add(r.studentId);
+    }
+
+    // A working day requires at least 15% of batch students present
+    const minStudents = Math.max(1, Math.ceil(totalBatchStudents * WORKING_DAY_THRESHOLD));
+    const workingDates = [...dateStudentMap.entries()]
+      .filter(([, students]) => students.size >= minStudents)
+      .map(([date]) => date)
+      .sort();
+
     const totalWorkingDays = workingDates.length;
     const workingDatesSet = new Set(workingDates);
 
+    // Current streak — consecutive present days, skipping non-working days
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const presentSet = new Set(presentDates);
     let streak = 0;
