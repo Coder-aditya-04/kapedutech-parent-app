@@ -13,7 +13,7 @@ declare class BarcodeDetector {
 type ScanStatus = "idle" | "verifying" | "success" | "punch_out" | "already_marked" | "too_soon" | "not_found" | "error";
 interface AttendanceResult { studentName: string; time: string; type: "PUNCH_IN" | "PUNCH_OUT"; }
 
-const COOLDOWN_MS = 5000;
+const COOLDOWN_MS = 2000;
 
 function playSound(type: "success" | "punchout" | "warning" | "error") {
   try {
@@ -58,6 +58,8 @@ export default function ScanPage() {
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [boxSize, setBoxSize] = useState(380);
   const [camError, setCamError] = useState("");
+  const [cooldownPct, setCooldownPct] = useState(0); // 0–100 for progress bar
+  const cooldownRaf = useRef<number>(0);
 
   const [facing, setFacing] = useState<"environment" | "user">("environment");
 
@@ -215,7 +217,21 @@ export default function ScanPage() {
       setStatus("error"); setErrorMsg("Network error.");
       playSound("error");
     }
-    setTimeout(() => { setStatus("idle"); setResult(null); setErrorMsg(""); processingRef.current = false; }, COOLDOWN_MS);
+    // Animate progress bar from 100% → 0% over COOLDOWN_MS, then unlock scanner
+    const start = performance.now();
+    cancelAnimationFrame(cooldownRaf.current);
+    setCooldownPct(100);
+    function animateCooldown() {
+      const elapsed = performance.now() - start;
+      const remaining = Math.max(0, 1 - elapsed / COOLDOWN_MS);
+      setCooldownPct(Math.round(remaining * 100));
+      if (elapsed < COOLDOWN_MS) {
+        cooldownRaf.current = requestAnimationFrame(animateCooldown);
+      } else {
+        setStatus("idle"); setResult(null); setErrorMsg(""); processingRef.current = false; setCooldownPct(0);
+      }
+    }
+    cooldownRaf.current = requestAnimationFrame(animateCooldown);
   }
 
   const borderColor =
@@ -360,7 +376,10 @@ export default function ScanPage() {
                     </div>
                     <span style={{ color: "#4ADE80", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, display: "block" }}>Attendance Marked</span>
                     <p style={{ color: "#FFFFFF", fontWeight: 800, fontSize: "clamp(18px,3.5vw,26px)", margin: "0 0 4px" }}>{result.studentName}</p>
-                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, margin: "0 0 16px" }}>Checked in at <span style={{ color: "#4ADE80", fontWeight: 700 }}>{result.time}</span></p>
+                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, margin: "0 0 12px" }}>Checked in at <span style={{ color: "#4ADE80", fontWeight: 700 }}>{result.time}</span></p>
+                    <div style={{ width: "100%", height: 4, borderRadius: 2, background: "rgba(255,255,255,0.10)", overflow: "hidden", marginBottom: 12 }}>
+                      <div style={{ height: "100%", width: `${cooldownPct}%`, background: "#4ADE80", borderRadius: 2, transition: "width 0.05s linear" }} />
+                    </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
                       <div style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700 }}>Keep the streak!</div></div>
                       <div style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700 }}>Aim for Rank 1!</div></div>
@@ -375,7 +394,10 @@ export default function ScanPage() {
                     </div>
                     <span style={{ color: "#60A5FA", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, display: "block" }}>Punched Out</span>
                     <p style={{ color: "#FFFFFF", fontWeight: 800, fontSize: "clamp(18px,3.5vw,26px)", margin: "0 0 4px" }}>{result.studentName}</p>
-                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, margin: "0 0 16px" }}>Checked out at <span style={{ color: "#60A5FA", fontWeight: 700 }}>{result.time}</span></p>
+                    <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, margin: "0 0 12px" }}>Checked out at <span style={{ color: "#60A5FA", fontWeight: 700 }}>{result.time}</span></p>
+                    <div style={{ width: "100%", height: 4, borderRadius: 2, background: "rgba(255,255,255,0.10)", overflow: "hidden", marginBottom: 12 }}>
+                      <div style={{ height: "100%", width: `${cooldownPct}%`, background: "#60A5FA", borderRadius: 2, transition: "width 0.05s linear" }} />
+                    </div>
                     <div style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 16px" }}><div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700 }}>See you tomorrow!</div></div>
                   </>
                 )}
