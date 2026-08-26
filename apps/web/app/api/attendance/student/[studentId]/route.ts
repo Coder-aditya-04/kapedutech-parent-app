@@ -15,7 +15,7 @@ export async function GET(
     const records = await prisma.attendance.findMany({
       where: { studentId },
       orderBy: { markedAt: "desc" },
-      take: 60,
+      take: 500,
     });
 
     return Response.json(records);
