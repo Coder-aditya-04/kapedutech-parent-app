@@ -30,9 +30,11 @@ export async function sendAbsentAlerts(center?: string): Promise<{ sent: number;
   const batchTotals = await prisma.student.groupBy({
     by: ["batch"],
     where: { ...(center ? { center } : {}) },
-    _count: { id: true },
+    _count: { _all: true },
   });
-  const totalByBatch = new Map(batchTotals.map(b => [b.batch, b._count.id]));
+  const totalByBatch = new Map<string, number>(
+    batchTotals.map(b => [b.batch, b._count._all] as [string, number])
+  );
 
   // Today's PUNCH_IN records for each batch
   const todayRecords = await prisma.attendance.findMany({

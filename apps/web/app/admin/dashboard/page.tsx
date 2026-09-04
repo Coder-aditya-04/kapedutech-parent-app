@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { usePolling } from "@/lib/usePolling";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -91,13 +92,8 @@ export default function DashboardPage() {
     setLoading(false);
   }, [center]);
 
-  useEffect(() => {
-    load();
-    const id = setInterval(load, 10000); // 10s — fast multi-admin sync
-    const onVisible = () => { if (!document.hidden) load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+  usePolling(load, 30000);
 
   useEffect(() => {
     const cp = batchCenter !== "All" ? `?center=${encodeURIComponent(batchCenter)}` : "";

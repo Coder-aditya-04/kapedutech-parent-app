@@ -76,6 +76,17 @@ export default function AttendancePage() {
     return () => document.removeEventListener("click", close);
   }, [showBatchFilter]);
 
+  // The student roster rarely changes — refetch it only when the center filter
+  // changes, not on every 30s poll. Polling only needs fresh attendance records.
+  const loadStudents = useCallback(async () => {
+    try {
+      const centerParam = center !== "All" ? center : "";
+      const stuUrl = centerParam ? `/api/admin/students?center=${encodeURIComponent(centerParam)}` : "/api/admin/students";
+      const res = await fetch(stuUrl);
+      if (res.ok) setAllStudents(await res.json());
+    } catch {}
+  }, [center]);
+
   const load = useCallback(async () => {
     try {
       const centerParam = center !== "All" ? center : "";
@@ -97,15 +108,14 @@ export default function AttendancePage() {
         url = `/api/admin/attendance/date?${params.toString()}`;
       }
 
-      const stuUrl = centerParam ? `/api/admin/students?center=${encodeURIComponent(centerParam)}` : "/api/admin/students";
-      const [recRes, stuRes] = await Promise.all([fetch(url), fetch(stuUrl)]);
+      const recRes = await fetch(url);
       setRecords(recRes.ok ? await recRes.json() : []);
-      setAllStudents(stuRes.ok ? await stuRes.json() : []);
     } catch {}
     setLoading(false);
   }, [batch, center, date, today]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
+  useEffect(() => { loadStudents(); }, [loadStudents]);
 
   async function sendAbsentAlert() {
     if (alertState === "sending") return;
@@ -131,12 +141,33 @@ export default function AttendancePage() {
     alertTimer.current = setTimeout(() => setAlertState("idle"), 6000);
   }
 
-  // Auto-refresh: every 10s + instantly when tab regains focus (silent — no spinner)
+  // Auto-refresh every 30s, but ONLY while the tab is actually visible.
+  // A forgotten open tab used to poll all night, keeping the database awake
+  // 24/7 and burning compute hours.
   useEffect(() => {
-    const id = setInterval(load, 10000);
-    const onVisible = () => { if (!document.hidden) load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+    let id: ReturnType<typeof setInterval> | null = null;
+
+    function startPolling() {
+      if (id) return;
+      id = setInterval(load, 30000);
+    }
+    function stopPolling() {
+      if (!id) return;
+      clearInterval(id);
+      id = null;
+    }
+    function onVisibilityChange() {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        load();
+        startPolling();
+      }
+    }
+
+    if (!document.hidden) startPolling();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => { stopPolling(); document.removeEventListener("visibilitychange", onVisibilityChange); };
   }, [load]);
 
   const summaryMap = new Map<string, Summary>();

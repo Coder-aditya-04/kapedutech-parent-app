@@ -63,21 +63,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (pathname === "/admin") return;
+
+    let id: ReturnType<typeof setInterval> | null = null;
+
     async function fetchSideStats() {
       try {
-        const [aRes, sRes] = await Promise.all([
-          fetch("/api/admin/attendance/today"),
-          fetch("/api/admin/students"),
-        ]);
-        const att: { type: string; studentId: string }[] = aRes.ok ? await aRes.json() : [];
-        const stu: unknown[] = sRes.ok ? await sRes.json() : [];
-        const present = new Set(att.filter(r => r.type === "PUNCH_IN").map(r => r.studentId)).size;
-        setSideStats({ present, total: stu.length });
+        const res = await fetch("/api/admin/stats/today");
+        if (res.ok) setSideStats(await res.json());
       } catch {}
     }
+
+    const start = () => { if (!id) id = setInterval(fetchSideStats, 60000); };
+    const stop = () => { if (id) { clearInterval(id); id = null; } };
+    const onVisibilityChange = () => {
+      if (document.hidden) { stop(); return; }
+      fetchSideStats();
+      start();
+    };
+
     fetchSideStats();
-    const id = setInterval(fetchSideStats, 30000);
-    return () => clearInterval(id);
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibilityChange); };
   }, [pathname]);
 
   function toggleDark() {

@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { usePolling } from "@/lib/usePolling";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -347,13 +348,7 @@ function ResultsPageInner() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh: every 30s + instantly when tab regains focus (silent — no spinner)
-  useEffect(() => {
-    const id = setInterval(load, 30000);
-    const onVisible = () => { if (!document.hidden) load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
-  }, [load]);
+  usePolling(load, 30000);
 
   useEffect(() => {
     const qTest = searchParams.get("test");

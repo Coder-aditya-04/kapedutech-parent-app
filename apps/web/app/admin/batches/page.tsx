@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { usePolling } from "@/lib/usePolling";
 import { motion, AnimatePresence } from "framer-motion";
 
 type Batch = { id: string; name: string; center: string; createdAt: string };
@@ -108,13 +109,8 @@ export default function BatchesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh: every 20s + instantly when tab regains focus (silent — no spinner)
-  useEffect(() => {
-    const id = setInterval(() => load(true), 20000);
-    const onVisible = () => { if (!document.hidden) load(true); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
-  }, [load]);
+  const pollBatches = useCallback(() => { load(true); }, [load]);
+  usePolling(pollBatches, 30000);
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { usePolling } from "@/lib/usePolling";
 
 type Student = { id: string; name: string; enrollmentNo: string; batch: string; center: string; parent: { phone: string; name: string; email?: string | null } };
 type Batch = { id: string; name: string };
@@ -165,13 +166,8 @@ export default function StudentsPage() {
     return () => document.removeEventListener("click", close);
   }, [showBatchFilter]);
 
-  // Auto-refresh: every 20s + instantly when tab regains focus (silent — no spinner)
-  useEffect(() => {
-    const id = setInterval(() => load(search || undefined), 20000);
-    const onVisible = () => { if (!document.hidden) load(search || undefined); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
-  }, [load, search]);
+  const pollStudents = useCallback(() => { load(search || undefined); }, [load, search]);
+  usePolling(pollStudents, 30000);
 
   function showToast(msg: string, ok: boolean) { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500); }
 

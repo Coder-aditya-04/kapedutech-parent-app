@@ -21,31 +21,26 @@ export async function GET(
 
     const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
 
-    const [results, attendances, batchAttendance60, totalBatchStudents] = await Promise.all([
+    const [results, attendances, batchCountsByDate, totalBatchStudents] = await Promise.all([
       prisma.testResult.findMany({ where: { studentId: id }, orderBy: { testDate: "desc" }, take: 50 }),
       prisma.attendance.findMany({ where: { studentId: id }, orderBy: { markedAt: "desc" }, take: 200 }),
-      // All PUNCH_IN records for the batch in the last 60 days (to determine working days)
-      prisma.attendance.findMany({
+      // One row per date with a count — not every individual record
+      prisma.attendance.groupBy({
+        by: ["date"],
         where: {
           type: "PUNCH_IN",
           student: { batch: student.batch, center: student.center },
           date: { gte: sixtyDaysAgo },
         },
-        select: { date: true, studentId: true },
+        _count: { _all: true },
       }),
       prisma.student.count({ where: { batch: student.batch, center: student.center } }),
     ]);
 
-    // Count distinct students per date; only count day as working if ≥15% present
-    const dateStudentMap = new Map<string, Set<string>>();
-    for (const r of batchAttendance60) {
-      if (!dateStudentMap.has(r.date)) dateStudentMap.set(r.date, new Set());
-      dateStudentMap.get(r.date)!.add(r.studentId);
-    }
     const minStudents = Math.max(1, Math.ceil(totalBatchStudents * WORKING_DAY_THRESHOLD));
-    const workingDays = [...dateStudentMap.entries()]
-      .filter(([, students]) => students.size >= minStudents)
-      .map(([date]) => date)
+    const workingDays = batchCountsByDate
+      .filter(d => d._count._all >= minStudents)
+      .map(d => d.date)
       .sort();
 
     const totalWorkingDays = workingDays.length;

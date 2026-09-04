@@ -23,37 +23,34 @@ export async function GET(
     });
     const batchName = studentInfo?.batch ?? "";
 
-    const [allRecords, allBatchAttendance, totalBatchStudents] = await Promise.all([
+    const [allRecords, batchCountsByDate, totalBatchStudents] = await Promise.all([
       // Student's own PUNCH_IN dates (for present days + streak)
       prisma.attendance.findMany({
         where: { studentId, type: "PUNCH_IN" },
         select: { date: true },
+        distinct: ["date"],
         orderBy: { date: "asc" },
       }),
-      // All PUNCH_IN records across the whole batch (to determine working days)
-      prisma.attendance.findMany({
+      // One row per date with a count — not every individual record.
+      // A student can only have one PUNCH_IN per day (enforced in qr-scan),
+      // so the row count equals the distinct-student count.
+      prisma.attendance.groupBy({
+        by: ["date"],
         where: { type: "PUNCH_IN", student: { batch: batchName } },
-        select: { date: true, studentId: true },
+        _count: { _all: true },
       }),
       // Total students in batch (for threshold calculation)
       prisma.student.count({ where: { batch: batchName } }),
     ]);
 
-    const presentDates = [...new Set(allRecords.map(r => r.date))];
+    const presentDates = allRecords.map(r => r.date);
     const totalPresent = presentDates.length;
-
-    // Count distinct students per date across the batch
-    const dateStudentMap = new Map<string, Set<string>>();
-    for (const r of allBatchAttendance) {
-      if (!dateStudentMap.has(r.date)) dateStudentMap.set(r.date, new Set());
-      dateStudentMap.get(r.date)!.add(r.studentId);
-    }
 
     // A working day requires at least 15% of batch students present
     const minStudents = Math.max(1, Math.ceil(totalBatchStudents * WORKING_DAY_THRESHOLD));
-    const workingDates = [...dateStudentMap.entries()]
-      .filter(([, students]) => students.size >= minStudents)
-      .map(([date]) => date)
+    const workingDates = batchCountsByDate
+      .filter(d => d._count._all >= minStudents)
+      .map(d => d.date)
       .sort();
 
     const totalWorkingDays = workingDates.length;
