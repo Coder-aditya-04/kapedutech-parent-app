@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
-import { getStudentHomework, istToday, type HomeworkItem, type HomeworkStatus } from "@/src/api/auth";
+import { getStudentHomework, istToday, addDays, type HomeworkItem, type HomeworkStatus } from "@/src/api/auth";
 import { useTheme, ACCENT, GOOD, BAD, WARN } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 
@@ -29,8 +29,7 @@ function fmtDay(d: string) {
 
 function dueLabel(due: string, today: string) {
   if (due === today) return "Due today";
-  const tomorrow = new Date(new Date(today + "T00:00:00").getTime() + 86400000).toLocaleDateString("en-CA");
-  if (due === tomorrow) return "Due tomorrow";
+  if (due === addDays(today, 1)) return "Due tomorrow";
   return `Due ${fmtDay(due)}`;
 }
 
@@ -45,15 +44,17 @@ function Pill({ label, color, icon }: { label: string; color: string; icon: Icon
 
 function HomeworkCard({ h, today }: { h: HomeworkItem; today: string }) {
   const t = useTheme();
-  const s = STATUS[h.status] ?? STATUS.pending;
+  const status = STATUS[h.status] ?? STATUS.pending;
   const cancelled = h.status === "cancelled";
-  // Overdue: the due date has passed and nobody has ticked it yet.
-  const overdue = !cancelled && h.status === "pending" && h.due_on < today;
+  // Past due and still pending means the centre hasn't checked it yet, not
+  // that the child is late, so say that instead of a red "Overdue".
+  const unchecked = !cancelled && h.status === "pending" && h.due_on < today;
+  const s = unchecked ? { label: "Not checked yet", color: "#64748B", icon: "clock-outline" as Icon } : status;
   return (
     <View
       style={{
         backgroundColor: t.card, borderRadius: 16, padding: 14, marginBottom: 10,
-        borderWidth: 1, borderColor: overdue ? `${BAD}55` : t.cardBorder,
+        borderWidth: 1, borderColor: t.cardBorder,
         opacity: cancelled ? 0.65 : 1,
       }}
     >
@@ -61,10 +62,7 @@ function HomeworkCard({ h, today }: { h: HomeworkItem; today: string }) {
         <Text style={{ fontSize: 11, fontWeight: "800", color: ACCENT, letterSpacing: 0.4, flexShrink: 1 }} numberOfLines={1}>
           {h.subject.toUpperCase()}
         </Text>
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          {overdue && <Pill label="Overdue" color={BAD} icon="alert-circle-outline" />}
-          <Pill label={s.label} color={s.color} icon={s.icon} />
-        </View>
+        <Pill label={s.label} color={s.color} icon={s.icon} />
       </View>
       <Text
         style={{
@@ -76,8 +74,8 @@ function HomeworkCard({ h, today }: { h: HomeworkItem; today: string }) {
       </Text>
       {h.details ? <Text style={{ fontSize: 13, color: t.text2, marginTop: 4, lineHeight: 19 }}>{h.details}</Text> : null}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
-        <MaterialCommunityIcons name="calendar-blank-outline" size={13} color={overdue ? BAD : t.text3} />
-        <Text style={{ fontSize: 12, color: overdue ? BAD : t.text3, fontWeight: overdue ? "700" : "400" }}>
+        <MaterialCommunityIcons name="calendar-blank-outline" size={13} color={t.text3} />
+        <Text style={{ fontSize: 12, color: t.text3 }}>
           {dueLabel(h.due_on, today)}
         </Text>
         <Text style={{ fontSize: 12, color: t.text3 }}>·</Text>
@@ -143,7 +141,7 @@ export default function HomeworkScreen() {
   const past = live.filter(h => h.due_on < today).sort((a, b) => b.due_on.localeCompare(a.due_on));
   const cancelled = items.filter(h => h.status === "cancelled");
   const doneCount = past.filter(h => h.status === "done").length;
-  const overdueCount = past.filter(h => h.status === "pending").length;
+  const uncheckedCount = past.filter(h => h.status === "pending").length;
 
   if (loading) {
     return (
@@ -191,9 +189,9 @@ export default function HomeworkScreen() {
                   <Text style={{ fontSize: 20, fontWeight: "800", color: GOOD }}>{doneCount}/{past.length}</Text>
                   <Text style={{ fontSize: 11, color: t.text3, fontWeight: "600", marginTop: 2 }}>Done</Text>
                 </View>
-                <View style={{ flex: 1, backgroundColor: overdueCount ? t.badSoft : t.neutralSoft, borderRadius: 12, paddingVertical: 10, alignItems: "center" }}>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: overdueCount ? BAD : t.text }}>{overdueCount}</Text>
-                  <Text style={{ fontSize: 11, color: t.text3, fontWeight: "600", marginTop: 2 }}>Overdue</Text>
+                <View style={{ flex: 1, backgroundColor: t.neutralSoft, borderRadius: 12, paddingVertical: 10, alignItems: "center" }}>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: t.text }}>{uncheckedCount}</Text>
+                  <Text style={{ fontSize: 11, color: t.text3, fontWeight: "600", marginTop: 2 }}>Not checked</Text>
                 </View>
                 <View style={{ flex: 1, backgroundColor: t.accentSoft, borderRadius: 12, paddingVertical: 10, alignItems: "center" }}>
                   <Text style={{ fontSize: 20, fontWeight: "800", color: ACCENT }}>{upcoming.length}</Text>

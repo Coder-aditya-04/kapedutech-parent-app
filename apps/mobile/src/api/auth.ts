@@ -15,10 +15,17 @@ async function authFetch(url: string, token: string): Promise<Response> {
   return res;
 }
 
-// "Today" in India, as YYYY-MM-DD. toISOString() gives the UTC date, which is
-// still yesterday between midnight and 5:30 AM IST.
+// "Today" in India, as YYYY-MM-DD. toISOString() alone gives the UTC date,
+// which is still yesterday between midnight and 5:30 AM IST. Shifting by the
+// fixed +5:30 offset avoids toLocaleDateString, whose output format and time
+// zone support vary on Hermes/Android.
 export function istToday(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+}
+
+/** YYYY-MM-DD plus n days, done in UTC so the device's time zone can't shift it. */
+export function addDays(day: string, n: number): string {
+  return new Date(Date.parse(day + "T00:00:00Z") + n * 86400e3).toISOString().slice(0, 10);
 }
 const BASE_URL = "https://kapedutech-platform.vercel.app/api/auth";
 const FIREBASE_VERIFY_URL = `${BASE_URL}/parent/firebase-verify`;
