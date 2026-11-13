@@ -196,3 +196,34 @@ export async function verifyFirebaseToken(idToken: string): Promise<VerifyOtpRes
   if (!res.ok) throw new Error(data.message ?? "Login failed.");
   return data as VerifyOtpResponse;
 }
+
+// ── Homework (set by faculty and checked by operations in KAP Core) ──────────
+const HOMEWORK_URL = "https://kapedutech-platform.vercel.app/api/homework";
+
+export type HomeworkStatus = "done" | "partial" | "not_done" | "pending";
+export type HomeworkItem = {
+  homework_id: string;
+  subject: string;
+  title: string;
+  details: string | null;
+  assigned_on: string;
+  due_on: string;
+  set_by: string;
+  status: HomeworkStatus;
+  checked_at: string | null;
+};
+
+export async function getStudentHomework(
+  studentId: string,
+  token: string
+): Promise<{ available: boolean; homework: HomeworkItem[] }> {
+  try {
+    const res = await fetch(`${HOMEWORK_URL}/student/${studentId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    return { available: !!data.available, homework: data.homework ?? [] };
+  } catch {
+    return { available: false, homework: [] };
+  }
+}

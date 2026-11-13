@@ -21,18 +21,24 @@ export async function sendPushNotification(
   }
 }
 
+// Expo rejects a request with more than 100 messages outright, so a large
+// send (absent alerts across all batches, a results upload) is split.
+const EXPO_MAX_PER_REQUEST = 100;
+
 export async function sendBatchPushNotifications(
   messages: { to: string; title: string; body: string }[]
 ): Promise<void> {
   const valid = messages.filter(m => m.to?.startsWith("ExponentPushToken["));
-  if (!valid.length) return;
-  try {
-    await fetch(EXPO_PUSH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(valid.map(m => ({ ...m, sound: "default", data: { title: m.title, body: m.body } }))),
-    });
-  } catch (err) {
-    console.error("[Notification] Batch failed:", err);
+  for (let i = 0; i < valid.length; i += EXPO_MAX_PER_REQUEST) {
+    const chunk = valid.slice(i, i + EXPO_MAX_PER_REQUEST);
+    try {
+      await fetch(EXPO_PUSH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(chunk.map(m => ({ ...m, sound: "default", data: { title: m.title, body: m.body } }))),
+      });
+    } catch (err) {
+      console.error("[Notification] Batch failed:", err);
+    }
   }
 }

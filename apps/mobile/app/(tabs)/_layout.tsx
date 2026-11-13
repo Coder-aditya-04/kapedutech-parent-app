@@ -89,6 +89,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="homework"
+        options={{
+          title: "Homework",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "book-open-page-variant" : "book-open-page-variant-outline"}
+              color={color} size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="attendance"
         options={{
           title: "Attendance",
