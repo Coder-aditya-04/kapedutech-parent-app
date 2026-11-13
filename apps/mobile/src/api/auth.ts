@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 const BASE_URL = "https://kapedutech-platform.vercel.app/api/auth";
 const FIREBASE_VERIFY_URL = `${BASE_URL}/parent/firebase-verify`;
 const EMAIL_OTP_URL = `${BASE_URL}/parent/request-otp-email`;
@@ -117,9 +118,12 @@ export async function verifyOtp(phone: string, otp: string): Promise<VerifyOtpRe
 }
 
 export async function savePushToken(parentId: string, pushToken: string): Promise<void> {
+  // The server identifies the parent from the login token, not from parentId.
+  const authToken = await AsyncStorage.getItem("auth_token");
+  if (!authToken) return;
   await fetch(`${BASE_URL}/parent/push-token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
     body: JSON.stringify({ parentId, pushToken }),
   });
 }

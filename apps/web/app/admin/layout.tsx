@@ -53,11 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     document.documentElement.classList.toggle("dark", saved);
   }, []);
 
-  useEffect(() => {
-    if (pathname !== "/admin" && localStorage.getItem("admin_auth") !== "true") {
-      router.replace("/admin");
-    }
-  }, [router, pathname]);
+  // Access is enforced server-side by middleware.ts (signed session cookie).
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
@@ -96,7 +92,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   function handleLogout() {
     localStorage.removeItem("admin_auth");
-    router.replace("/admin");
+    void fetch("/api/auth/admin/logout", { method: "POST" }).finally(() => router.replace("/admin"));
   }
 
   if (pathname === "/admin") return <>{children}</>;

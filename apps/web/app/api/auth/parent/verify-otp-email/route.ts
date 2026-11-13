@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import { JWT_SECRET } from "@/lib/auth";
+import { consumeOtp } from "@/lib/otp";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,15 +10,9 @@ export async function POST(request: NextRequest) {
 
     if (!email || !otp) return Response.json({ message: "email and otp are required." }, { status: 400 });
 
-    const record = await prisma.otp.findFirst({
-      where: { phone: email, otp, verified: false },
-      orderBy: { expiresAt: "desc" },
-    });
-
-    if (!record) return Response.json({ message: "Invalid OTP." }, { status: 401 });
-    if (record.expiresAt < new Date()) return Response.json({ message: "OTP expired. Request a new one." }, { status: 401 });
-
-    await prisma.otp.update({ where: { id: record.id }, data: { verified: true } });
+    const check = await consumeOtp(email, otp);
+    if (check === "expired") return Response.json({ message: "OTP expired. Request a new one." }, { status: 401 });
+    if (check !== "ok") return Response.json({ message: "Invalid OTP." }, { status: 401 });
 
     const parent = await prisma.parent.findFirst({
       where: { email },

@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 const JWT_SECRET = process.env["JWT_SECRET"] ?? "dev_secret_change_in_prod";
 
@@ -26,4 +27,19 @@ export function requireAdmin(request: NextRequest): Response | null {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
   }
   return null;
+}
+
+// Parent auth plus a check that the student belongs to this parent, so one
+// parent cannot read another family's attendance or results by changing the id.
+export async function requireParentOwnsStudent(
+  request: NextRequest,
+  studentId: string
+): Promise<{ parentId: string } | Response> {
+  const auth = requireParentAuth(request);
+  if (auth instanceof Response) return auth;
+  const student = await prisma.student.findUnique({ where: { id: studentId }, select: { parentId: true } });
+  if (!student || student.parentId !== auth.parentId) {
+    return Response.json({ message: "Forbidden" }, { status: 403 });
+  }
+  return auth;
 }
