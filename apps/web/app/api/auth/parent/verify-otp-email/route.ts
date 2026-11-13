@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
-import { JWT_SECRET } from "@/lib/auth";
+import { jwtSecret } from "@/lib/auth";
 import { consumeOtp } from "@/lib/otp";
 
 export async function POST(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     if (!parent) return Response.json({ message: "Parent not found." }, { status: 404 });
 
-    const token = jwt.sign({ parentId: parent.id, email: parent.email }, JWT_SECRET, { expiresIn: "30d" });
+    const token = jwt.sign({ parentId: parent.id, email: parent.email }, jwtSecret(), { expiresIn: "30d" });
 
     return Response.json({ token, parent: { id: parent.id, name: parent.name, phone: parent.phone, email: parent.email, students: parent.students } });
   } catch (e) {

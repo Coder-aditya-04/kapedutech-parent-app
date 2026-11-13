@@ -13,6 +13,8 @@ const STATUS_TEXT: Record<string, string> = {
   not_done: "did not complete",
 };
 
+const MAX_AGE_MS = 5 * 60 * 1000;
+
 function verify(body: string, signature: string | null): boolean {
   const secret = process.env["KAPCORE_WEBHOOK_SECRET"];
   if (!secret || !signature) return false;
@@ -59,6 +61,12 @@ export async function POST(request: NextRequest) {
   if (!isEvent(event)) {
     return Response.json({ message: "Unknown or malformed event" }, { status: 400 });
   }
+  // sent_at is inside the signed body, so a captured request cannot be
+  // replayed later to re-send pushes to every parent in a batch.
+  const sentAt = Date.parse(String((event as { sent_at?: unknown }).sent_at ?? ""));
+  if (!Number.isFinite(sentAt) || Math.abs(Date.now() - sentAt) > MAX_AGE_MS) {
+    return Response.json({ message: "Stale event" }, { status: 401 });
+  }
 
   try {
     const messages: { to: string; title: string; body: string }[] = [];
@@ -68,7 +76,11 @@ export async function POST(request: NextRequest) {
       const batch = await prisma.batch.findUnique({ where: { id: event.kc_batch_id } });
       if (!batch) return Response.json({ ok: true, sent: 0 });
       const students = await prisma.student.findMany({
-        where: { batch: batch.name, center: batch.center },
+        // Case-insensitive, like KAP Core's students view: Student.batch is typed by hand.
+        where: {
+          batch: { equals: batch.name.trim(), mode: "insensitive" },
+          center: { equals: batch.center.trim(), mode: "insensitive" },
+        },
         select: { name: true, parent: { select: { pushToken: true } } },
       });
       for (const s of students) {

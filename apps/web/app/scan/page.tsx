@@ -74,6 +74,22 @@ export default function ScanPage() {
 
   useEffect(() => { setBoxSize(computeBoxSize()); }, []);
 
+  // Kiosk key: opened once as /scan?key=..., then remembered on this device
+  // and dropped from the address bar.
+  const kioskKeyRef = useRef<string>("");
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const fromUrl = url.searchParams.get("key");
+      if (fromUrl) {
+        localStorage.setItem("kioskKey", fromUrl);
+        url.searchParams.delete("key");
+        window.history.replaceState(null, "", url.toString());
+      }
+      kioskKeyRef.current = localStorage.getItem("kioskKey") ?? "";
+    } catch { /* storage unavailable */ }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     setCamError("");
@@ -190,7 +206,8 @@ export default function ScanPage() {
 
     try {
       const res = await fetch("/api/attendance/qr-scan", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(kioskKeyRef.current ? { "x-kiosk-key": kioskKeyRef.current } : {}) },
         body: JSON.stringify({ qrCode: decodedText }),
       });
       const data = await res.json();

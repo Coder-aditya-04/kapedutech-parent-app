@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const batch = request.nextUrl.searchParams.get("batch") ?? undefined;
     const center = request.nextUrl.searchParams.get("center") ?? undefined;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // India date, as qr-scan writes it
 
     const studentFilter = {
       ...(batch ? { batch } : {}),

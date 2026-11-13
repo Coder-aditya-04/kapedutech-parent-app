@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { istDate, istDaysAgo } from "@/lib/dates";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(
@@ -12,10 +13,8 @@ export async function GET(
   try {
     const { name } = await params;
     const batchName = decodeURIComponent(name);
-    const today = new Date().toISOString().slice(0, 10);
-    const thirtyAgo = new Date();
-    thirtyAgo.setDate(thirtyAgo.getDate() - 30);
-    const startDate = thirtyAgo.toISOString().slice(0, 10);
+    const today = istDate();
+    const startDate = istDaysAgo(30);
 
     const students = await prisma.student.findMany({
       where: { batch: batchName },

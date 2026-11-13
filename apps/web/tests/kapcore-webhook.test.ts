@@ -15,8 +15,8 @@ vi.mock("@/lib/notifications", () => ({ sendBatchPushNotifications: (...a: unkno
 import { POST } from "@/app/api/integrations/kapcore/webhook/route";
 import { req } from "./helpers";
 
-function signed(body: unknown, secret = "test-webhook-secret") {
-  const raw = typeof body === "string" ? body : JSON.stringify(body);
+function signed(body: unknown, secret = "test-webhook-secret", sentAt = new Date()) {
+  const raw = typeof body === "string" ? body : JSON.stringify({ sent_at: sentAt.toISOString(), ...(body as object) });
   const sig = createHmac("sha256", secret).update(raw).digest("hex");
   return req("/api/integrations/kapcore/webhook", { method: "POST", body: raw, headers: { "x-kapcore-signature": sig } });
 }
@@ -50,7 +50,10 @@ describe("POST /api/integrations/kapcore/webhook", () => {
     ]);
     const res = await POST(signed(assigned));
     expect(await res.json()).toEqual({ ok: true, sent: 1 });
-    expect(studentFindMany.mock.calls[0]![0].where).toEqual({ batch: "JEE Growth-1", center: "College Road" });
+    expect(studentFindMany.mock.calls[0]![0].where).toEqual({
+      batch: { equals: "JEE Growth-1", mode: "insensitive" },
+      center: { equals: "College Road", mode: "insensitive" },
+    });
     expect(send.mock.calls[0]![0]).toEqual([
       expect.objectContaining({ to: "ExponentPushToken[a]", title: "New Physics homework" }),
     ]);
@@ -67,5 +70,11 @@ describe("POST /api/integrations/kapcore/webhook", () => {
     expect(await res.json()).toEqual({ ok: true, sent: 1 });
     expect(studentFindMany.mock.calls[0]![0].where).toEqual({ enrollmentNo: { in: ["R1"] } });
     expect(send.mock.calls[0]![0][0].body).toBe('Asha partly completed "Ch 5".');
+  });
+
+  it("refuses a correctly signed event replayed more than five minutes later", async () => {
+    const old = new Date(Date.now() - 10 * 60_000);
+    expect((await POST(signed(assigned, "test-webhook-secret", old))).status).toBe(401);
+    expect(send).not.toHaveBeenCalled();
   });
 });

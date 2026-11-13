@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { istDate, istDaysAgo } from "@/lib/dates";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -13,11 +14,8 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    const startDate = thirtyDaysAgo.toISOString().slice(0, 10);
-    const endDate = today.toISOString().slice(0, 10);
+    const startDate = istDaysAgo(30);
+    const endDate = istDate();
 
     const analytics = await Promise.all(batches.map(async batch => {
       const students = await prisma.student.findMany({

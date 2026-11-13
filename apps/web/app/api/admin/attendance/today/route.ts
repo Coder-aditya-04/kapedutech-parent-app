@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // India date, as qr-scan writes it
     const center = request.nextUrl.searchParams.get("center") ?? undefined;
 
     const records = await prisma.attendance.findMany({
