@@ -38,7 +38,7 @@ const OTP_LENGTH = 6;
 const OTP_EXPIRY_SECONDS = 300;
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const t = useTheme();
   const [step, setStep] = useState<Step>("phone");
   const [loginMethod, setLoginMethod] = useState<"phone" | "email">("phone");
@@ -96,7 +96,8 @@ export default function LoginScreen() {
   async function finishLoginFromBackend(token: string, parent: { id: string; phone: string }) {
     await AsyncStorage.setItem("auth_token", token);
     await AsyncStorage.setItem("parent", JSON.stringify(parent));
-    login(parent.phone ?? "");
+    // Email-only parents can have an empty phone; any non-empty key means signed in.
+    login(parent.phone || (parent as { email?: string }).email || parent.id);
     router.replace("/(tabs)");
     setTimeout(() => {
       registerForPushNotifications()
@@ -290,6 +291,15 @@ export default function LoginScreen() {
                   : "We'll send a 6-digit OTP to your registered email address."}
               </Text>
             </View>
+
+            {sessionExpired && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.warnSoft, borderRadius: 12, padding: 12, marginHorizontal: 24, marginBottom: 16, zIndex: 2 }}>
+                <MaterialCommunityIcons name="clock-alert-outline" size={18} color="#B45309" />
+                <Text style={{ color: t.dark ? "#FCD34D" : "#92400E", fontSize: 13, flex: 1 }}>
+                  Your login has expired. Please log in again to see the latest updates.
+                </Text>
+              </View>
+            )}
 
             {/* Method toggle */}
             <View style={{ flexDirection: "row", backgroundColor: t.neutralSoft, borderRadius: 14, padding: 4, gap: 4, marginHorizontal: 24, marginBottom: 16, zIndex: 2 }}>

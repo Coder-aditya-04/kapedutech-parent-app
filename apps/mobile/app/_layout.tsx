@@ -104,6 +104,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="test-detail" />
+          <Stack.Screen name="fees" />
           <Stack.Screen name="modal" />
         </Stack>
         <StatusBar style={scheme === "dark" ? "light" : "dark"} />

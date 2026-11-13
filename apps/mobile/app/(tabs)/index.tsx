@@ -242,9 +242,14 @@ export default function DashboardScreen() {
             <Ring pct={summary.allTimePct} size={108} stroke={10} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: "700", color: t.text3, letterSpacing: 0.8, textTransform: "uppercase" }}>Overall attendance</Text>
+              {/* The ring is all-time, so say so; it used to sit under this
+                  month's name and read as a monthly figure. */}
               <Text style={{ fontSize: 18, fontWeight: "700", color: t.text, letterSpacing: -0.3, marginTop: 4 }}>
-                {new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+                {summary.totalPresent} of {summary.totalWorkingDays} days
               </Text>
+              {absent > 0 && (
+                <Text style={{ fontSize: 12, color: t.text3, marginTop: 2 }}>{absent} {absent === 1 ? "day" : "days"} missed</Text>
+              )}
               {summary.currentStreak > 0 && (
                 <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: t.warnSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 }}>
@@ -263,7 +268,7 @@ export default function DashboardScreen() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             {[
               { label: "Present", value: summary.totalPresent, tone: "good" as const },
-              { label: "Working", value: summary.totalWorkingDays, tone: "neutral" as const },
+              { label: "Class days", value: summary.totalWorkingDays, tone: "neutral" as const },
               { label: "Streak", value: summary.currentStreak, tone: "accent" as const },
             ].map(s => {
               const map = { good: { fg: GOOD, bg: t.goodSoft }, neutral: { fg: t.text, bg: t.neutralSoft }, accent: { fg: ACCENT, bg: t.accentSoft } };
@@ -293,12 +298,27 @@ export default function DashboardScreen() {
           </GlassCard>
         </TouchableOpacity>
 
+        {/* ─── Fees ─── */}
+        <TouchableOpacity activeOpacity={0.88} onPress={() => router.push("/fees" as never)}>
+          <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 }}>
+            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: GOOD, alignItems: "center", justifyContent: "center" }}>
+              <MaterialCommunityIcons name="wallet-outline" size={24} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: t.text3, fontWeight: "600" }}>Fees</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: t.text }}>View fees and payments</Text>
+              <Text style={{ fontSize: 12, color: t.text3, marginTop: 2 }}>Balance due, next date & receipts</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={t.text3} />
+          </GlassCard>
+        </TouchableOpacity>
+
         {/* ─── Recent Activity ─── */}
         {recentDays.length > 0 && (
           <>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 4, marginBottom: 12 }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: t.text }}>Recent activity</Text>
-              <TouchableOpacity onPress={() => router.push("/(tabs)/notifications" as never)} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => router.push("/(tabs)/attendance" as never)} activeOpacity={0.7}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: ACCENT }}>See all</Text>
               </TouchableOpacity>
             </View>
