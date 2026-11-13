@@ -50,7 +50,10 @@ describe("POST /api/integrations/kapcore/webhook", () => {
     ]);
     const res = await POST(signed(assigned));
     expect(await res.json()).toEqual({ ok: true, sent: 1 });
-    expect(studentFindMany.mock.calls[0]![0].where).toEqual({ batch: "JEE Growth-1", center: "College Road" });
+    expect(studentFindMany.mock.calls[0]![0].where).toEqual({
+      batch: { equals: "JEE Growth-1", mode: "insensitive" },
+      center: { equals: "College Road", mode: "insensitive" },
+    });
     expect(send.mock.calls[0]![0]).toEqual([
       expect.objectContaining({ to: "ExponentPushToken[a]", title: "New Physics homework" }),
     ]);

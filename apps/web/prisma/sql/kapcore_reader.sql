@@ -28,6 +28,12 @@ create or replace view public.batches as
 
 -- A student belongs to a batch by name + centre (Student.batch is the name).
 -- roll_number is the enrolment number: the join key in both systems.
+-- Names are compared ignoring case and repeated spaces: Student.batch is typed
+-- free-hand, and "JEE growth-1" used to drop that student out of KAP Core
+-- (no homework, no tick row) without any error.
+create or replace function public.kc_norm(t text) returns text
+  language sql immutable as $$ select lower(regexp_replace(btrim(coalesce(t, '')), '\s+', ' ', 'g')) $$;
+
 create or replace view public.students as
   select s.id::text                    as id,
          s."enrollmentNo"              as roll_number,
@@ -35,7 +41,8 @@ create or replace view public.students as
          b.id::text                    as batch_id,
          true                          as is_active
     from "Student" s
-    join "Batch" b on b.name = s.batch and b.center = s.center
+    join "Batch" b on public.kc_norm(b.name) = public.kc_norm(s.batch)
+                  and public.kc_norm(b.center) = public.kc_norm(s.center)
    where s."enrollmentNo" <> '';
 
 -- One row per student per WORKING DAY of their batch in the last 60 days.

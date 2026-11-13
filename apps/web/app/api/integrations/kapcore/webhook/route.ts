@@ -76,7 +76,11 @@ export async function POST(request: NextRequest) {
       const batch = await prisma.batch.findUnique({ where: { id: event.kc_batch_id } });
       if (!batch) return Response.json({ ok: true, sent: 0 });
       const students = await prisma.student.findMany({
-        where: { batch: batch.name, center: batch.center },
+        // Case-insensitive, like KAP Core's students view: Student.batch is typed by hand.
+        where: {
+          batch: { equals: batch.name.trim(), mode: "insensitive" },
+          center: { equals: batch.center.trim(), mode: "insensitive" },
+        },
         select: { name: true, parent: { select: { pushToken: true } } },
       });
       for (const s of students) {
