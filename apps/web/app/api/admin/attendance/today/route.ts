@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { attendanceListSelect } from "@/lib/selects";
 
 export async function GET(request: NextRequest) {
   const denied = requireAdmin(request);
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
 
     const records = await prisma.attendance.findMany({
       where: { date: today, ...(center ? { student: { center } } : {}) },
-      include: { student: { include: { parent: true } } },
+      select: attendanceListSelect,
       orderBy: { markedAt: "asc" },
     });
 

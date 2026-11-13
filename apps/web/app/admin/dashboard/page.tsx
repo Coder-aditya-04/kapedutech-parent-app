@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 
-type Student = { id: string; name: string; enrollmentNo: string; batch: string; parent: { phone: string; name: string } };
+type Student = { id: string; name: string; enrollmentNo: string; batch: string };
 type AttendanceRecord = { id: string; studentId: string; date: string; type: "PUNCH_IN" | "PUNCH_OUT"; markedAt: string; student: Student };
 type StudentSummary = { student: Student; punchIn: string | null; punchOut: string | null };
 type BatchAnalytics = { id: string; name: string; totalStudents: number; avgAttendancePct: number; totalWorkingDays?: number };
