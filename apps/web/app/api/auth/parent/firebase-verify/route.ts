@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import { verifyFirebaseIdToken } from "@/lib/firebase";
-import { JWT_SECRET } from "@/lib/auth";
+import { jwtSecret } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return Response.json({ message: "No parent account found for this number. Contact your institute." }, { status: 404 });
     }
 
-    const token = jwt.sign({ parentId: parent.id, phone: parent.phone }, JWT_SECRET, { expiresIn: "30d" });
+    const token = jwt.sign({ parentId: parent.id, phone: parent.phone }, jwtSecret(), { expiresIn: "30d" });
 
     return Response.json({ token, parent: { id: parent.id, name: parent.name, phone: parent.phone, students: parent.students } });
   } catch (e) {

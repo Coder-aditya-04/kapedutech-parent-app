@@ -3,8 +3,11 @@ import { sendAbsentAlerts } from "@/app/api/admin/notifications/absent-alert/rou
 
 // Called by Vercel Cron at 10 AM IST (04:30 UTC) every weekday
 export async function GET(request: NextRequest) {
-  const secret = request.headers.get("authorization");
-  if (secret !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Without CRON_SECRET the old check accepted "Bearer undefined" from anyone,
+  // which let a stranger fire absent alerts to every parent.
+  const cronSecret = process.env.CRON_SECRET;
+  const sent = request.headers.get("authorization");
+  if (!cronSecret || sent !== `Bearer ${cronSecret}`) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
   }
 

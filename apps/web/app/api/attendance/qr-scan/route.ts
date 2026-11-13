@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/notifications";
@@ -6,7 +7,23 @@ function istDateString(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
+// Opt-in kiosk lock. While SCAN_KIOSK_KEY is unset this endpoint stays open,
+// as it always was; once it is set, only a scanner opened with
+// /scan?key=<value> (remembered on that device) can mark attendance, so a
+// stranger cannot mark a roll number present and push "arrived" to a parent.
+function kioskAllowed(request: NextRequest): boolean {
+  const key = process.env["SCAN_KIOSK_KEY"];
+  if (!key) return true;
+  const sent = request.headers.get("x-kiosk-key") ?? "";
+  const a = Buffer.from(sent);
+  const b = Buffer.from(key);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export async function POST(request: NextRequest) {
+  if (!kioskAllowed(request)) {
+    return Response.json({ message: "This scanner is not authorised. Open it with the kiosk link." }, { status: 401 });
+  }
   try {
     const { qrCode } = await request.json() as { qrCode?: string };
 

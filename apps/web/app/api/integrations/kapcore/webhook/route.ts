@@ -13,6 +13,8 @@ const STATUS_TEXT: Record<string, string> = {
   not_done: "did not complete",
 };
 
+const MAX_AGE_MS = 5 * 60 * 1000;
+
 function verify(body: string, signature: string | null): boolean {
   const secret = process.env["KAPCORE_WEBHOOK_SECRET"];
   if (!secret || !signature) return false;
@@ -35,7 +37,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const event = JSON.parse(raw) as Event;
+    const event = JSON.parse(raw) as Event & { sent_at?: string };
+    // sent_at is inside the signed body, so a captured request cannot be
+    // replayed later to re-send pushes to every parent in a batch.
+    const sentAt = Date.parse(event.sent_at ?? "");
+    if (!Number.isFinite(sentAt) || Math.abs(Date.now() - sentAt) > MAX_AGE_MS) {
+      return Response.json({ message: "Stale event" }, { status: 401 });
+    }
     const messages: { to: string; title: string; body: string }[] = [];
 
     if (event.type === "homework.assigned") {
