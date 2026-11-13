@@ -1,4 +1,25 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// ── Session expiry ───────────────────────────────────────────────────────────
+// Login tokens last 30 days. When one runs out every API answers 401, and
+// before this the screens quietly showed empty data forever. Any 401 now
+// calls this handler (AuthContext sets it) so the parent is sent to login.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
+async function authFetch(url: string, token: string): Promise<Response> {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) onUnauthorized?.();
+  return res;
+}
+
+// "Today" in India, as YYYY-MM-DD. toISOString() gives the UTC date, which is
+// still yesterday between midnight and 5:30 AM IST.
+export function istToday(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
 const BASE_URL = "https://kapedutech-platform.vercel.app/api/auth";
 const FIREBASE_VERIFY_URL = `${BASE_URL}/parent/firebase-verify`;
 const EMAIL_OTP_URL = `${BASE_URL}/parent/request-otp-email`;
@@ -32,9 +53,7 @@ export type TodayAttendance = {
 
 export async function getStudentAttendance(studentId: string, token: string): Promise<AttendanceRecord[]> {
   try {
-    const res = await fetch(`${ATTENDANCE_URL}/student/${studentId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await authFetch(`${ATTENDANCE_URL}/student/${studentId}`, token);
     if (!res.ok) return [];
     return res.json();
   } catch { return []; }
@@ -50,9 +69,7 @@ export type AttendanceSummary = {
 
 export async function getAttendanceSummary(studentId: string, token: string): Promise<AttendanceSummary> {
   try {
-    const res = await fetch(`${ATTENDANCE_URL}/student/${studentId}/summary`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await authFetch(`${ATTENDANCE_URL}/student/${studentId}/summary`, token);
     if (!res.ok) return { totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0, workingDates: [] };
     return res.json();
   } catch { return { totalPresent: 0, totalWorkingDays: 0, currentStreak: 0, allTimePct: 0, workingDates: [] }; }
@@ -60,9 +77,7 @@ export async function getAttendanceSummary(studentId: string, token: string): Pr
 
 export async function getTodayAttendance(studentId: string, token: string): Promise<TodayAttendance> {
   try {
-    const res = await fetch(`${ATTENDANCE_URL}/student/${studentId}/today`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await authFetch(`${ATTENDANCE_URL}/student/${studentId}/today`, token);
     if (!res.ok) return { punchIn: null, punchOut: null };
     return res.json();
   } catch { return { punchIn: null, punchOut: null }; }
@@ -72,6 +87,7 @@ export type Student = {
   id: string;
   name: string;
   enrollmentNo: string;
+  batch?: string;
   qrCode: string;
 };
 
@@ -178,9 +194,7 @@ export function realPct(r: TestResult): number {
 
 export async function getStudentResults(studentId: string, token: string): Promise<TestResult[]> {
   try {
-    const res = await fetch(`${ATTENDANCE_URL}/student/${studentId}/results`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await authFetch(`${ATTENDANCE_URL}/student/${studentId}/results`, token);
     if (!res.ok) return [];
     return res.json();
   } catch { return []; }
@@ -200,7 +214,9 @@ export async function verifyFirebaseToken(idToken: string): Promise<VerifyOtpRes
 // ── Homework (set by faculty and checked by operations in KAP Core) ──────────
 const HOMEWORK_URL = "https://kapedutech-platform.vercel.app/api/homework";
 
-export type HomeworkStatus = "done" | "partial" | "not_done" | "pending";
+// "cancelled" is not sent yet; the homework spec asks the feed to keep
+// cancelled work visible for 7 days, and the screen is ready for it.
+export type HomeworkStatus = "done" | "partial" | "not_done" | "pending" | "cancelled";
 export type HomeworkItem = {
   homework_id: string;
   subject: string;
@@ -218,12 +234,25 @@ export async function getStudentHomework(
   token: string
 ): Promise<{ available: boolean; homework: HomeworkItem[] }> {
   try {
-    const res = await fetch(`${HOMEWORK_URL}/student/${studentId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await authFetch(`${HOMEWORK_URL}/student/${studentId}`, token);
+    if (!res.ok) return { available: false, homework: [] };
     const data = await res.json();
     return { available: !!data.available, homework: data.homework ?? [] };
   } catch {
     return { available: false, homework: [] };
+  }
+}
+
+// Fresh list of the parent's children (with batch). The copy saved at login
+// goes stale when a child is added or moves batch, so the app refreshes it on
+// start. Returns null when offline or on any error, so callers keep the cache.
+export async function getParentStudents(parentId: string, token: string): Promise<Student[] | null> {
+  try {
+    const res = await authFetch(`${BASE_URL}/parent/students/${parentId}`, token);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? (data as Student[]) : null;
+  } catch {
+    return null;
   }
 }

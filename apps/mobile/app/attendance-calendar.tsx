@@ -5,8 +5,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/src/context/AuthContext";
 import {
-  getStudentAttendance, getTodayAttendance, getAttendanceSummary,
+  getStudentAttendance, getTodayAttendance, getAttendanceSummary, istToday,
   type AttendanceRecord, type TodayAttendance, type AttendanceSummary,
 } from "@/src/api/auth";
 
@@ -44,7 +45,8 @@ export default function AttendanceCalendarScreen() {
   const now = new Date();
   const [calMonth, setCalMonth] = useState({ year: now.getFullYear(), month: now.getMonth() });
 
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = istToday();
+  const { activeStudentId } = useAuth();
 
   useEffect(() => {
     (async () => {
@@ -52,7 +54,7 @@ export default function AttendanceCalendarScreen() {
         const [raw, token] = await Promise.all([AsyncStorage.getItem("parent"), AsyncStorage.getItem("auth_token")]);
         if (!raw || !token) return;
         const p = JSON.parse(raw);
-        const student = p.students?.[0];
+        const student = (activeStudentId ? p.students?.find((s: { id: string }) => s.id === activeStudentId) : null) ?? p.students?.[0];
         if (!student) return;
         const [hist, tod, summ] = await Promise.all([
           getStudentAttendance(student.id, token),
@@ -65,7 +67,7 @@ export default function AttendanceCalendarScreen() {
       } catch {}
       finally { setLoading(false); }
     })();
-  }, []);
+  }, [activeStudentId]);
 
   const attendanceMap = useMemo(() => {
     const map: Record<string, { punchIn: string | null; punchOut: string | null }> = {};

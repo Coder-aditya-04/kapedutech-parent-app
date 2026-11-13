@@ -5,7 +5,7 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
-import { getStudentAttendance, getAttendanceSummary, type AttendanceRecord, type AttendanceSummary } from "@/src/api/auth";
+import { getStudentAttendance, getAttendanceSummary, istToday, type AttendanceRecord, type AttendanceSummary } from "@/src/api/auth";
 import { useTheme, ACCENT, GOOD, BAD } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 
@@ -48,7 +48,7 @@ export default function AttendanceScreen() {
   const t = useTheme();
   const { activeStudentId } = useAuth();
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = istToday();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
