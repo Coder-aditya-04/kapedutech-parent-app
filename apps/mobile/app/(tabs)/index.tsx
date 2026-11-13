@@ -298,6 +298,21 @@ export default function DashboardScreen() {
           </GlassCard>
         </TouchableOpacity>
 
+        {/* ─── Fees ─── */}
+        <TouchableOpacity activeOpacity={0.88} onPress={() => router.push("/fees" as never)}>
+          <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 }}>
+            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: GOOD, alignItems: "center", justifyContent: "center" }}>
+              <MaterialCommunityIcons name="wallet-outline" size={24} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: t.text3, fontWeight: "600" }}>Fees</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: t.text }}>View fees and payments</Text>
+              <Text style={{ fontSize: 12, color: t.text3, marginTop: 2 }}>Balance due, next date & receipts</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={t.text3} />
+          </GlassCard>
+        </TouchableOpacity>
+
         {/* ─── Recent Activity ─── */}
         {recentDays.length > 0 && (
           <>

@@ -263,3 +263,34 @@ export async function getParentStudents(parentId: string, token: string): Promis
     return null;
   }
 }
+
+// ── Fees (read from the Unacademy ERP by the parent app server) ─────────────
+const FEES_URL = "https://kapedutech-platform.vercel.app/api/fees";
+
+export type FeePayment = { amount: number; mode: string | null; date: string | null; type: string | null };
+export type FeeAccount = {
+  id: string;
+  program: string;
+  rollNumber: string | null;
+  status: string | null;
+  totalFee: number;
+  paid: number;
+  balance: number;
+  nextDueDate: string | null;
+  payments: FeePayment[];
+};
+
+/** available:false means the ERP couldn't be read: show "unavailable", never ₹0. */
+export async function getStudentFees(
+  studentId: string,
+  token: string
+): Promise<{ available: boolean; accounts: FeeAccount[] }> {
+  try {
+    const res = await authFetch(`${FEES_URL}/student/${studentId}`, token);
+    if (!res.ok) return { available: false, accounts: [] };
+    const data = await res.json();
+    return { available: !!data.available, accounts: Array.isArray(data.accounts) ? data.accounts : [] };
+  } catch {
+    return { available: false, accounts: [] };
+  }
+}
