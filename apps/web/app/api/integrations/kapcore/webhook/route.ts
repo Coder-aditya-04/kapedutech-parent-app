@@ -22,6 +22,22 @@ function verify(body: string, signature: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Shape check before anything reads the payload. A signed but malformed body
+// (a KAP Core bug, or a future event type) used to throw and answer 500.
+function isEvent(e: unknown): e is Event {
+  if (!e || typeof e !== "object") return false;
+  const o = e as Record<string, unknown>;
+  const str = (k: string) => typeof o[k] === "string" && (o[k] as string).length > 0;
+  if (o["type"] === "homework.assigned") {
+    return str("homework_id") && str("kc_batch_id") && str("subject") && str("title") && str("due_on");
+  }
+  if (o["type"] === "homework.checked") {
+    return str("homework_id") && str("subject") && str("title") && Array.isArray(o["rolls"]) &&
+      (o["rolls"] as unknown[]).every(r => !!r && typeof (r as { roll?: unknown }).roll === "string" && typeof (r as { status?: unknown }).status === "string");
+  }
+  return false;
+}
+
 function dueText(d: string): string {
   return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
@@ -34,8 +50,17 @@ export async function POST(request: NextRequest) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
   }
 
+  let event: unknown;
   try {
-    const event = JSON.parse(raw) as Event;
+    event = JSON.parse(raw);
+  } catch {
+    return Response.json({ message: "Invalid JSON" }, { status: 400 });
+  }
+  if (!isEvent(event)) {
+    return Response.json({ message: "Unknown or malformed event" }, { status: 400 });
+  }
+
+  try {
     const messages: { to: string; title: string; body: string }[] = [];
 
     if (event.type === "homework.assigned") {
@@ -54,7 +79,7 @@ export async function POST(request: NextRequest) {
           body: `${s.name || "Your child"}: ${event.title} (due ${dueText(event.due_on)})`,
         });
       }
-    } else if (event.type === "homework.checked") {
+    } else {
       const rolls = event.rolls.slice(0, 500);
       const students = await prisma.student.findMany({
         where: { enrollmentNo: { in: rolls.map(r => r.roll) } },
@@ -70,8 +95,6 @@ export async function POST(request: NextRequest) {
           body: `${s.name || "Your child"} ${STATUS_TEXT[st] ?? st} "${event.title}".`,
         });
       }
-    } else {
-      return Response.json({ message: "Unknown event" }, { status: 400 });
     }
 
     await sendBatchPushNotifications(messages);
