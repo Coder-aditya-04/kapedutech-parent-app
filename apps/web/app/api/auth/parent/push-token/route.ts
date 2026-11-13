@@ -1,13 +1,17 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireParentAuth } from "@/lib/auth";
 
+// The parent is taken from the login token, never from the request body, so
+// nobody can point another parent's notifications at their own phone.
 export async function POST(request: NextRequest) {
   try {
-    const { parentId, pushToken } = await request.json() as { parentId?: string; pushToken?: string };
+    const auth = requireParentAuth(request);
+    if (auth instanceof Response) return auth;
 
-    if (!parentId) return Response.json({ message: "parentId is required." }, { status: 400 });
+    const { pushToken } = await request.json() as { pushToken?: string };
 
-    await prisma.parent.update({ where: { id: parentId }, data: { pushToken: pushToken || null } });
+    await prisma.parent.update({ where: { id: auth.parentId }, data: { pushToken: pushToken || null } });
 
     return Response.json({ message: "Push token saved." });
   } catch (e) {

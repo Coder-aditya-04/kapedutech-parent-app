@@ -1,16 +1,15 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireParentAuth } from "@/lib/auth";
+import { requireParentOwnsStudent } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const auth = requireParentAuth(request);
-    if (auth instanceof Response) return auth;
-
     const { studentId } = await params;
+    const auth = await requireParentOwnsStudent(request, studentId);
+    if (auth instanceof Response) return auth;
 
     const records = await prisma.attendance.findMany({
       where: { studentId },

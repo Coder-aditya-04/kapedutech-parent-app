@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 const BASE_URL = "https://kapedutech-platform.vercel.app/api/auth";
 const FIREBASE_VERIFY_URL = `${BASE_URL}/parent/firebase-verify`;
 const EMAIL_OTP_URL = `${BASE_URL}/parent/request-otp-email`;
@@ -117,9 +118,12 @@ export async function verifyOtp(phone: string, otp: string): Promise<VerifyOtpRe
 }
 
 export async function savePushToken(parentId: string, pushToken: string): Promise<void> {
+  // The server identifies the parent from the login token, not from parentId.
+  const authToken = await AsyncStorage.getItem("auth_token");
+  if (!authToken) return;
   await fetch(`${BASE_URL}/parent/push-token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
     body: JSON.stringify({ parentId, pushToken }),
   });
 }
@@ -191,4 +195,35 @@ export async function verifyFirebaseToken(idToken: string): Promise<VerifyOtpRes
   const data = await res.json();
   if (!res.ok) throw new Error(data.message ?? "Login failed.");
   return data as VerifyOtpResponse;
+}
+
+// ── Homework (set by faculty and checked by operations in KAP Core) ──────────
+const HOMEWORK_URL = "https://kapedutech-platform.vercel.app/api/homework";
+
+export type HomeworkStatus = "done" | "partial" | "not_done" | "pending";
+export type HomeworkItem = {
+  homework_id: string;
+  subject: string;
+  title: string;
+  details: string | null;
+  assigned_on: string;
+  due_on: string;
+  set_by: string;
+  status: HomeworkStatus;
+  checked_at: string | null;
+};
+
+export async function getStudentHomework(
+  studentId: string,
+  token: string
+): Promise<{ available: boolean; homework: HomeworkItem[] }> {
+  try {
+    const res = await fetch(`${HOMEWORK_URL}/student/${studentId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    return { available: !!data.available, homework: data.homework ?? [] };
+  } catch {
+    return { available: false, homework: [] };
+  }
 }

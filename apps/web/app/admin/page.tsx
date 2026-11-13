@@ -10,23 +10,32 @@ export default function AdminLoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("admin_auth") === "true") {
-      router.replace("/admin/dashboard");
-    }
+    // The server session cookie is the real gate (see middleware.ts); a stale
+    // localStorage flag from the old client-only login must not cause a loop.
+    localStorage.removeItem("admin_auth");
   }, [router]);
 
   async function handleLogin(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    await new Promise(r => setTimeout(r, 300));
-    if (password === "admin@kap123") {
-      localStorage.setItem("admin_auth", "true");
-      router.push("/admin/dashboard");
-    } else {
-      setError("Incorrect password. Please try again.");
-      setLoading(false);
+    try {
+      const res = await fetch("/api/auth/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        localStorage.setItem("admin_auth", "true");
+        router.push("/admin/dashboard");
+        return;
+      }
+      const data = await res.json().catch(() => ({})) as { message?: string };
+      setError(data.message ?? "Incorrect password. Please try again.");
+    } catch {
+      setError("Could not reach the server. Please try again.");
     }
+    setLoading(false);
   }
 
   return (

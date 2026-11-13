@@ -4,9 +4,12 @@ import { prisma } from "@/lib/prisma";
 const OTP_TTL_MINUTES = 10;
 
 async function sendEmailOtp(email: string, otp: string): Promise<void> {
-  console.log(`[OTP] Email: ${email}  OTP: ${otp}`);
   const resendKey = process.env["RESEND_API_KEY"];
-  if (!resendKey) return;
+  if (!resendKey) {
+    // Local development only: no mail provider, so print the code.
+    console.log(`[OTP] Email: ${email}  OTP: ${otp}`);
+    return;
+  }
   try {
     await fetch("https://api.resend.com/emails", {
       method: "POST",
