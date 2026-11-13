@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { istDate } from "@/lib/dates";
 import { requireParentOwnsStudent } from "@/lib/auth";
 
 export async function GET(
@@ -10,7 +11,7 @@ export async function GET(
     const { studentId } = await params;
     const auth = await requireParentOwnsStudent(request, studentId);
     if (auth instanceof Response) return auth;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istDate();
 
     const records = await prisma.attendance.findMany({ where: { studentId, date: today } });
     const punchIn = records.find(r => r.type === "PUNCH_IN");

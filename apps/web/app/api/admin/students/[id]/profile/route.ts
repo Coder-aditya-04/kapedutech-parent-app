@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { istDaysAgo } from "@/lib/dates";
 import { requireAdmin } from "@/lib/auth";
 
 const WORKING_DAY_THRESHOLD = 0.15;
@@ -19,7 +20,7 @@ export async function GET(
     });
     if (!student) return Response.json({ message: "Student not found" }, { status: 404 });
 
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+    const sixtyDaysAgo = istDaysAgo(60);
 
     const [results, attendances, batchCountsByDate, totalBatchStudents] = await Promise.all([
       prisma.testResult.findMany({ where: { studentId: id }, orderBy: { testDate: "desc" }, take: 50 }),
